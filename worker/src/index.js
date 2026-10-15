@@ -1,6 +1,6 @@
 // お店のサイトを読んで、年6回プランの「キャッチ・お店の魅力3点・号ごとの理由とテーマ」を返す中継サーバー
-// POST / {url, text?, name, industry, goal?, memo?, eds:[{key,name,count}], issues:[{i,label,closed}], season, chance}
-//   → {headline, features:[3], months:[{i,score,reason,angle}], best:[i…], source:"site"|"text"|"memo"}
+// POST / {url, text?, name, industry, goal?, memo?, eds:[{key,name,count}], issues:[{m,label,closed}], season, chance}
+//   → {headline, features:[3], months:[{m,score,reason,angle}], best:[m…], source:"site"|"text"|"memo"}
 //   号の最終的な選び方（締切・間隔・ピーク・版の回数）はページ側で決める
 // AIは Cloudflare Workers AI（無料枠 1日10,000ニューロン、カード登録なし）を使う
 
@@ -31,7 +31,7 @@ export default {
       .map(e => ({ key: str(e.key, 20), name: str(e.name, 30), count: Math.max(0, Math.min(12, +e.count || 0)) }))
       .filter(e => e.key && e.count);
     const issues = (Array.isArray(b.issues) ? b.issues : []).slice(0, 12)
-      .map(o => ({ i: +o.i, label: str(o.label, 40), closed: !!o.closed })).filter(o => Number.isInteger(o.i));
+      .map(o => ({ m: +o.m, label: str(o.label, 40), closed: !!o.closed })).filter(o => o.m >= 1 && o.m <= 12);
     const total = eds.reduce((a, e) => a + e.count, 0);
     if (!total || !issues.length) return json({ error: "掲載版と開始の号を選んでください。" }, 400, cors);
 
@@ -67,17 +67,17 @@ ${str(b.chance, 600) || "特になし"}
 [掲載版と回数]
 ${eds.map(e => `${e.name} ${e.count}回`).join("、")}
 
-[選べる号（番号: 号）]
-${issues.map(o => `${o.i}: ${o.label}${o.closed ? "（締切済み・選ばない）" : ""}`).join("\n")}
+[選べる号]
+${issues.map(o => `${o.label}${o.closed ? "（締切済み・選ばない）" : ""}`).join("\n")}
 「○月号」はその月の1か月間読まれる（前月末に配布）。
 
 [参考データ]
 ${str(b.season, 3000)}
 
 [ルール]
-- months には「選べる号」のうち締切済みでない号を全部入れる（号の順）
+- months には「選べる号」のうち締切済みでない号を全部入れる（号の順）。m はその号の月の数字（例: 2027年5月号なら5）。reason と angle は必ずその月の出来事に合わせる
 - score は「このお店にとって、その号に載せる価値」を1〜5で付ける。業種のピーク号（◎）・周年・お店の行事や季節商品の時期は高く
-- best には、各版の回数の合計${total}回ぶんの号の番号を選ぶ。業種のピーク号は必ず入れ、掲載の間は3か月以内にする
+- best には、各版の回数の合計${total}回ぶんの号を月の数字で選ぶ。業種のピーク号は必ず入れ、掲載の間は3か月以内にする
 - reason には「その月に何があるか」と「このお店の何が合うか」の両方を書く（例: 母の日。名前入りのフルーツギフトが贈りものに合う）
 - サイトやメモから分かる「そのお店ならではの事実」（看板商品、季節の商品、行事、立地、予約の仕組み、イベント、周年）を reason か angle に必ず入れる。どのお店にも当てはまる一般論だけにしない
 - 掲載の目的が2つ以上のときだけ、号ごとに主役を1つに決め、angle の頭に【求人】などの主役を付ける。目的が1つなら【】は付けない
@@ -86,8 +86,8 @@ ${str(b.season, 3000)}
 次の形のJSONだけを返してください:
 {"headline":"お客様向けのキャッチ（30字以内）",
  "features":["お店の魅力（各35字以内、別々の切り口で3つ）","…","…"],
- "months":[{"i":号の番号,"score":1〜5,"reason":"この号に載せる理由（30字以内）","angle":"原稿のテーマ（20字以内）"}, …],
- "best":[号の番号, …${total}件]}`;
+ "months":[{"m":号の月の数字,"score":1〜5,"reason":"この号に載せる理由（30字以内）","angle":"原稿のテーマ（20字以内）"}, …],
+ "best":[号の月の数字, …${total}件]}`;
 
     let res;
     try {
@@ -103,11 +103,11 @@ ${str(b.season, 3000)}
     }
     const out = parseOutput(res);
     if (!out) return json({ error: "うまくまとめられませんでした。もう一度押してください。" }, 502, cors);
-    const open = new Set(issues.filter(o => !o.closed).map(o => o.i));
+    const open = new Set(issues.filter(o => !o.closed).map(o => o.m));
     const months = (Array.isArray(out.months) ? out.months : [])
-      .map(m => ({ i: +m.i, score: Math.max(1, Math.min(5, Math.round(+m.score) || 1)), reason: str(m.reason, 120), angle: str(m.angle, 80) }))
-      .filter(m => open.has(m.i));
-    const best = (Array.isArray(out.best) ? out.best : []).map(Number).filter(i => open.has(i));
+      .map(m => ({ m: +m.m, score: Math.max(1, Math.min(5, Math.round(+m.score) || 1)), reason: str(m.reason, 120), angle: str(m.angle, 80) }))
+      .filter(m => open.has(m.m));
+    const best = (Array.isArray(out.best) ? out.best : []).map(Number).filter(m => open.has(m));
     return json({
       headline: str(out.headline, 120),
       features: (Array.isArray(out.features) ? out.features : []).map(v => str(v, 120)).filter(Boolean).slice(0, 3),

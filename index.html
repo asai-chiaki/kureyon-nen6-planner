@@ -334,20 +334,23 @@ function autoPlan(ai){
   const ind=INDUSTRY[st.ind]||{peak:[],good:[]}, a=annivInfo(), r=rivalInfo();
   const range=issuesRange();
   const cands=range.filter(o=>deadlines(o).finalDate>=today).map(o=>{
-    const k=issueKey(o), idx=range.indexOf(o), am=ai&&ai.byI.get(idx); let score=1, why=[];
+    const k=issueKey(o), am=ai&&ai.byM.get(o.m); let score=1, why=[];
     if(ind.peak.includes(o.m)){score=5;why.push("一年でいちばん需要が高まる時期");}
     else if(ind.good.includes(o.m)){score=2;why.push("需要が伸びる時期");}
     if(a&&issueKey(a.o)===k){score+=a.milestone?4:3;why.unshift(`${a.years}周年の号`);}
     if(r&&(issueKey(r.prev)===k||issueKey(r.o)===k)){score+=2;why.push("このエリアで先に知ってもらう");}
     if(ind.peak.includes(o.m+1)||(o.m===12&&ind.peak.includes(1)))why.push("翌月の山に向けた予約・予告");
-    if(ai)score+=(am?am.score*3:0)+(ai.best.has(idx)?4:0);
+    if(ai)score+=(am?am.score*3:0)+(ai.best.has(o.m)?4:0);
     return {...o,k,score,why,am};});
   // 候補は最大12号なので、すべての組み合わせを試して一番よいものを選ぶ
   const want=Math.min(n,cands.length);let chosen=[],bv=-Infinity;
+  const peakMust=ind.peak.filter(m=>cands.some(c=>c.m===m));
   for(let mask=0;mask<(1<<cands.length);mask++){
     let bits=0;for(let x=mask;x;x&=x-1)bits++;if(bits!==want)continue;
     const pick=cands.filter((c,i)=>mask&(1<<i));
     let v=pick.reduce((a,c)=>a+c.score,0)*10;
+    // 業種のピーク号は必ず入れる
+    v-=1000*peakMust.filter(m=>!pick.some(c=>c.m===m)).length;
     // 年をまたいで同じ組み方を続けるので、最後の号から翌年の最初の号までの間も数える
     for(let i=0;i<pick.length;i++){const g=i?pick[i].k-pick[i-1].k:pick[0].k+12-pick[pick.length-1].k;if(g>3)v-=100*(g-3);v-=g*g;}
     if(v>bv){bv=v;chosen=pick;}
@@ -493,8 +496,8 @@ function getPass(){try{return localStorage.getItem(PASS_KEY)||"";}catch(e){retur
 function setPass(v){try{v?localStorage.setItem(PASS_KEY,v):localStorage.removeItem(PASS_KEY);}catch(e){}}
 // AIの採点（号ごとの価値・理由・テーマ）をもとに、締切・掲載の間・ピーク号・版の回数のルールで号を決める
 function planFromAI(d){
-  const byI=new Map((d.months||[]).map(m=>[m.i,m]));
-  const picks=autoPlan({byI,best:new Set(d.best||[])})||[];
+  const byM=new Map((d.months||[]).map(m=>[m.m,m]));
+  const picks=autoPlan({byM,best:new Set(d.best||[])})||[];
   const filled=picks.filter(p=>p.rule).length;
   picks.forEach(p=>delete p.rule);
   return {picks,notes:filled?[`${filled}回分はAIの文がなかったので、理由を決まった文で入れました。テーマを書き足してください`]:[]};
@@ -519,7 +522,7 @@ async function runAI(){
   const range=issuesRange();
   const body={url:st.url.trim(),text:st.paste.trim(),memo:st.memo.trim(),name:st.name,industry:st.ind,goal:st.goal,
     eds:selEds().map(k=>({key:k,name:ED[k].name,count:st.eds[k]})),
-    issues:range.map((o,i)=>({i,label:issueLabel(o),closed:deadlines(o).finalDate<today})),
+    issues:range.map(o=>({m:o.m,label:issueLabel(o),closed:deadlines(o).finalDate<today})),
     season:seasonText(),chance:chanceText()};
   let pass=getPass();
   for(let tries=0;tries<3;tries++){
