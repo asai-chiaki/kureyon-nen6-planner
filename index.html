@@ -39,7 +39,8 @@ textarea{resize:vertical;min-height:84px}
 input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .hint{font-size:12px;color:var(--muted);margin:0}
 .eds{display:grid;gap:6px}
-.ed-row{display:grid;grid-template-columns:auto 1fr 74px;gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:6px}
+.ed-row{display:grid;grid-template-columns:auto 1fr 58px 58px;gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:6px}
+.ed-row.ed-head{border:0;padding:0 8px;font-size:12px;color:var(--muted);text-align:center}
 .ed-row.on{border-color:var(--accent);background:var(--accent-soft)}
 .ed-row .dot{width:10px;height:10px;border-radius:50%}
 .ed-row label{display:flex;align-items:center;gap:6px;font-weight:500}
@@ -96,6 +97,8 @@ ul.plain{margin:0;padding-left:1.2em}
 .sheet .tl div.hit{color:#fff}
 .sheet .tl div.hit b{color:#fff}
 .sheet .tl .y{font-size:9px}
+.sheet .typetag{display:inline-block;font-size:9.5px;font-weight:700;border-radius:3px;padding:0 4px;margin-top:2px;border:1px solid #0a8fae;color:#0a7f9b}
+.sheet .typetag.job{border-color:#c46a14;color:#b25a12}
 .sheet table{font-size:11px;border-collapse:collapse;width:100%}
 .sheet th{background:#eef3f4;color:#3c4a4c;font-size:10.5px;padding:5px 6px;border-bottom:1px solid #cfd8d9;text-align:left;white-space:nowrap}
 .sheet td{padding:5px 6px;border-bottom:1px solid #e3e9ea;vertical-align:top;line-height:1.5}
@@ -142,10 +145,6 @@ ul.plain{margin:0;padding-left:1.2em}
     <!-- 入力 -->
     <section class="panel" aria-labelledby="in-h">
       <h2 id="in-h">1. お客様と掲載条件</h2>
-      <div class="seg" id="mode" role="group" aria-label="広告の種類">
-        <button type="button" data-mode="ad">通常の広告</button>
-        <button type="button" data-mode="job">求人広告（まちJOB）</button>
-      </div>
       <label>お客様名<input type="text" id="f-name" placeholder="例: ○○フルーツ店"></label>
       <label>業種<select id="f-ind"></select></label>
 
@@ -169,16 +168,24 @@ ul.plain{margin:0;padding-left:1.2em}
       <div id="chance" class="msg info" hidden></div>
 
       <h3>掲載版と回数（複数選べます）</h3>
+      <p class="hint">「通常」はふつうの広告、「求人」は求人欄（まちJOB）の回数です。たとえば通常3回＋求人3回のように分けられます。</p>
       <div class="eds" id="eds"></div>
       <div id="count-msg" class="msg info"></div>
 
-      <h3 id="size-h">広告の種類とサイズ</h3>
-      <div class="seg" id="kind">
-        <button type="button" data-k="free">フリー広告</button>
-        <button type="button" data-k="fixed">定型広告</button>
+      <div id="ad-size" class="eds">
+        <h3>通常の広告の種類とサイズ</h3>
+        <div class="seg" id="kind">
+          <button type="button" data-k="free">フリー広告</button>
+          <button type="button" data-k="fixed">定型広告</button>
+        </div>
+        <label>サイズ<select id="f-size"></select></label>
+        <label style="display:flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" id="f-prod" checked> 制作費を毎回計上する（フリー広告）</label>
       </div>
-      <label><span id="size-label">サイズ</span><select id="f-size"></select></label>
-      <label id="prod-box" style="display:flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" id="f-prod" checked> 制作費を毎回計上する（フリー広告）</label>
+      <div id="job-size" class="eds" hidden>
+        <h3>求人広告（まちJOB）の枠</h3>
+        <label>枠の大きさ<select id="f-jobsize"></select></label>
+        <p class="hint">求人広告に制作費はかかりません。</p>
+      </div>
 
       <label>掲載開始の号<select id="f-start"></select></label>
       <div class="row2">
@@ -200,7 +207,7 @@ ul.plain{margin:0;padding-left:1.2em}
 
       <h3>掲載する号</h3>
       <div class="tbl"><table class="picks">
-        <thead><tr><th>#</th><th>号</th><th>版</th><th>申込（理想／最終）</th><th>載せる理由</th><th>原稿のテーマ</th></tr></thead>
+        <thead id="picks-head"></thead>
         <tbody id="picks"></tbody>
       </table></div>
       <div id="pick-msg"></div>
@@ -232,6 +239,9 @@ ul.plain{margin:0;padding-left:1.2em}
 <script>
 const ED_ORDER = Object.keys(ED);
 const INDUSTRIES = Object.keys(INDUSTRY);
+// 広告の種類: ad=通常の広告, job=求人広告（まちJOB）
+const TYPES = ["ad","job"];
+const TYPE_NAME = {ad:"通常",job:"求人"};
 
 /* ---------- 号と日付 ---------- */
 const today = new Date();
@@ -247,58 +257,71 @@ function deadlines(iss){const p=addM(iss.y,iss.m,-1),pp=addM(iss.y,iss.m,-2);
 function issueLabel(o,withYear=true){return (withYear?`${o.y}年`:"")+`${o.m}月号`;}
 function tierIdx(n){if(n>=12)return 7;if(n>=9)return 6;if(n>=6)return 5;return Math.max(0,n-1);}
 function tierName(n){return ["年1回","年2回","年3回","年4回","年5回","年6〜8回","年9〜11回","年12回"][tierIdx(n)];}
+// 求人の料金は 年1回・年6回・年12回 の3段階（2〜5回は年1回、7〜11回は年6回の料金）
+function jobTierIdx(n){return n>=12?2:n>=6?1:0;}
+function jobTierName(n){return ["年1回","年6回","年12回"][jobTierIdx(n)];}
 const yen = v => v==null?"—":v.toLocaleString("ja-JP");
 
 /* ---------- 状態（このブラウザに自動保存） ---------- */
 const STORE = "kureyon-nen6-planner-v1";
-function blank(){return {name:"",ind:INDUSTRIES[0],url:"",goal:"",memo:"",paste:"",anniv:"",rivalM:"",rival:"",
-  eds:{kiyosu:6},kind:"free",size:"1/4P",prod:true,start:earliestIssue(),staff:"",tel:"",
-  mode:"ad",jobSize:"1/15",job:"",
+function blank(){return {name:"",ind:INDUSTRIES[0],url:"",goal:"",job:"",memo:"",paste:"",anniv:"",rivalM:"",rival:"",
+  eds:{kiyosu:6},jobEds:{},kind:"free",size:"1/4P",prod:true,jobSize:"1/15",start:earliestIssue(),staff:"",tel:"",
   headline:"",features:[],picks:[]};}
 let st = blank();
-try{const s=JSON.parse(localStorage.getItem(STORE)||"null");if(s&&s.start)st=Object.assign(blank(),s);}catch(e){}
+try{const s=JSON.parse(localStorage.getItem(STORE)||"null");
+  if(s&&s.start){st=Object.assign(blank(),s);
+    // 以前の「求人広告モード」で保存した内容は、回数を求人の欄へ移す
+    if(s.mode==="job"&&!s.jobEds){st.jobEds=s.eds||{};st.eds={};}
+    st.picks=(st.picks||[]).map(p=>({...p,type:p.type||(s.mode==="job"?"job":"ad")}));delete st.mode;}}catch(e){}
 if(issueKey(st.start)<issueKey(earliestIssue()))st.start=earliestIssue();
 let saveT=null;
 function save(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem(STORE,JSON.stringify(st));}catch(e){}},300);}
 
-/* ---------- 入力UI ---------- */
+/* ---------- 回数と種類 ---------- */
 const $ = id => document.getElementById(id);
-function total(){return Object.values(st.eds).reduce((a,b)=>a+(b||0),0);}
-function selEds(){return ED_ORDER.filter(k=>st.eds[k]>0);}
-function mainEd(){const s=selEds();return s.sort((a,b)=>(st.eds[b]-st.eds[a])||(ED_ORDER.indexOf(a)-ED_ORDER.indexOf(b)))[0];}
-// 求人広告（まちJOB）モードかどうかで、ピーク号・月の出来事・サイズの呼び方を切り替える
-function isJob(){return st.mode==="job";}
-function season(){return isJob()?JOB_SEASON:(INDUSTRY[st.ind]||{peak:[],good:[]});}
-function themeOf(m){return (isJob()?JOB_MONTH_THEME:MONTH_THEME)[m];}
-function sizeName(){return isJob()?`求人広告（まちJOB） ${st.jobSize}枠`:`${st.kind==="free"?"フリー広告":"定型広告"} ${st.size}`;}
-// 求人の料金は 年1回・年6回・年12回 の3段階（2〜5回は年1回、7〜11回は年6回の料金）
-function jobTierIdx(n){return n>=12?2:n>=6?1:0;}
-function planTierName(n){return isJob()?["年1回の料金","年6回の料金","年12回の料金"][jobTierIdx(n)]:tierName(n);}
+function edsOf(type){return type==="job"?st.jobEds:st.eds;}
+function cnt(type){return Object.values(edsOf(type)).reduce((a,b)=>a+(b||0),0);}
+function total(){return cnt("ad")+cnt("job");}
+function usedTypes(){return TYPES.filter(t=>cnt(t)>0);}
+function mixed(){return cnt("ad")>0&&cnt("job")>0;}
+function jobOnly(){return cnt("job")>0&&cnt("ad")===0;}
+function selEds(type){const e=edsOf(type);return ED_ORDER.filter(k=>e[k]>0);}
+function mainEd(type){const e=edsOf(type);return selEds(type).sort((a,b)=>(e[b]-e[a])||(ED_ORDER.indexOf(a)-ED_ORDER.indexOf(b)))[0];}
+function season(type){return type==="job"?JOB_SEASON:(INDUSTRY[st.ind]||{peak:[],good:[]});}
+function themeOf(type,m){return (type==="job"?JOB_MONTH_THEME:MONTH_THEME)[m];}
+function sizeName(type){return type==="job"?`求人広告（まちJOB） ${st.jobSize}枠`:`${st.kind==="free"?"フリー広告":"定型広告"} ${st.size}`;}
+function tierLabel(type,n){return type==="job"?`${jobTierName(n)}の料金`:tierName(n);}
+// 1回あたりの掲載料。n は料金ランクを決める回数（通常・求人の合計回数）
+// undefined: その版にそのサイズがない / null: その回数では申し込めない
+function unitPrice(type,k,n){
+  if(type==="job")return JOB_P[k==="ichinomiya"?"ichinomiya":"other"][st.jobSize][jobTierIdx(n)];
+  const t=P[k][st.kind][st.size];return t?t[tierIdx(n)]:undefined;}
 
+/* ---------- 入力UI ---------- */
 function buildInputs(){
-  $("src-label").textContent=PRICE_SOURCE;
   $("f-ind").innerHTML = INDUSTRIES.map(v=>`<option>${esc(v)}</option>`).join("");
-  $("eds").innerHTML = ED_ORDER.map(k=>`<div class="ed-row" id="row-${k}">
+  $("eds").innerHTML = `<div class="ed-row ed-head" aria-hidden="true"><span></span><span></span><span>通常</span><span>求人</span></div>`+ED_ORDER.map(k=>`<div class="ed-row" id="row-${k}">
      <label><input type="checkbox" id="ck-${k}"><span class="dot" style="background:${ED[k].color}"></span>${ED[k].name}</label>
      <span class="hint">${ED[k].copies.toLocaleString()}部</span>
-     <input type="number" id="ct-${k}" min="0" max="12" aria-label="${ED[k].name}の回数">
+     <input type="number" id="ct-${k}" min="0" max="12" aria-label="${ED[k].name}の通常広告の回数">
+     <input type="number" id="jt-${k}" min="0" max="12" aria-label="${ED[k].name}の求人広告の回数">
    </div>`).join("");
+  const num=v=>Math.max(0,Math.min(12,parseInt(v||"0",10)||0));
   ED_ORDER.forEach(k=>{
-    $("ck-"+k).addEventListener("change",e=>{st.eds[k]=e.target.checked?(st.eds[k]||Math.max(1,6-total())):0;syncInputs();renderAll();});
-    $("ct-"+k).addEventListener("input",e=>{const v=Math.max(0,Math.min(12,parseInt(e.target.value||"0",10)||0));st.eds[k]=v;syncInputs(false);renderAll();});
+    $("ck-"+k).addEventListener("change",e=>{
+      if(e.target.checked){if(!(st.eds[k]||0)&&!(st.jobEds[k]||0))st.eds[k]=Math.max(1,6-total());}
+      else{st.eds[k]=0;st.jobEds[k]=0;}
+      syncInputs();renderAll();});
+    $("ct-"+k).addEventListener("input",e=>{st.eds[k]=num(e.target.value);syncInputs(false);renderAll();});
+    $("jt-"+k).addEventListener("input",e=>{st.jobEds[k]=num(e.target.value);syncInputs(false);renderAll();});
   });
   document.querySelectorAll("#kind button").forEach(b=>b.addEventListener("click",()=>{st.kind=b.dataset.k;
     if(!SIZES[st.kind].includes(st.size))st.size="1/4P";syncInputs();renderAll();}));
-  document.querySelectorAll("#mode button").forEach(b=>b.addEventListener("click",()=>{
-    if(st.mode===b.dataset.mode)return;
-    if(st.picks.length&&!confirm("広告の種類を切り替えると、掲載号の表を作り直す必要があります。表を空にして切り替えますか？"))return;
-    st.mode=b.dataset.mode;st.picks=[];syncInputs();renderAll();$("status").textContent="";}));
   const bind=(id,key,ev="input")=>$(id).addEventListener(ev,e=>{st[key]=e.target.value;renderAll();});
-  bind("f-job","job");
   bind("f-name","name");bind("f-staff","staff");bind("f-tel","tel");
-  bind("f-url","url");bind("f-goal","goal");bind("f-memo","memo");bind("f-paste","paste");
+  bind("f-url","url");bind("f-goal","goal");bind("f-job","job");bind("f-memo","memo");bind("f-paste","paste");
   bind("f-ind","ind","change");bind("f-anniv","anniv");bind("f-rival-m","rivalM");bind("f-rival","rival");
-  $("f-size").addEventListener("change",e=>{if(isJob())st.jobSize=e.target.value;else st.size=e.target.value;renderAll();});
+  bind("f-size","size","change");bind("f-jobsize","jobSize","change");
   $("f-prod").addEventListener("change",e=>{st.prod=e.target.checked;renderAll();});
   $("f-start").addEventListener("change",e=>{const k=+e.target.value;st.start={y:Math.floor(k/12),m:k%12+1};renderAll();});
   $("e-headline").addEventListener("input",e=>{st.headline=e.target.value;renderSheet();save();});
@@ -306,20 +329,19 @@ function buildInputs(){
 }
 function syncInputs(counts=true){
   $("f-name").value=st.name;$("f-staff").value=st.staff;$("f-tel").value=st.tel;
-  $("f-url").value=st.url;$("f-goal").value=st.goal;$("f-memo").value=st.memo;$("f-paste").value=st.paste;
+  $("f-url").value=st.url;$("f-goal").value=st.goal;$("f-job").value=st.job;$("f-memo").value=st.memo;$("f-paste").value=st.paste;
   $("f-anniv").value=st.anniv;$("f-rival-m").value=st.rivalM;$("f-rival").value=st.rival;$("f-ind").value=st.ind;$("f-prod").checked=st.prod;
-  ED_ORDER.forEach(k=>{const on=st.eds[k]>0;$("ck-"+k).checked=on;$("row-"+k).classList.toggle("on",on);
-    if(counts)$("ct-"+k).value=on?st.eds[k]:"";$("ct-"+k).disabled=!on;});
-  const job=isJob();
-  document.querySelectorAll("#mode button").forEach(b=>b.classList.toggle("on",b.dataset.mode===st.mode));
-  $("kind").hidden=job;$("prod-box").hidden=job;$("goal-box").hidden=job;$("job-box").hidden=!job;$("f-job").value=st.job;
-  $("size-h").textContent=job?"求人広告の枠":"広告の種類とサイズ";$("size-label").textContent=job?"枠の大きさ":"サイズ";
-  $("feat-label").textContent=job?"職場の魅力 3点":"お店の魅力 3点";
-  $("run").textContent=job?"求人のおすすめで組む":"業種のおすすめで組む";
-  $("src-label").textContent=job?JOB_PRICE_SOURCE:PRICE_SOURCE;
+  ED_ORDER.forEach(k=>{const a=st.eds[k]||0,j=st.jobEds[k]||0,on=a+j>0;$("ck-"+k).checked=on;$("row-"+k).classList.toggle("on",on);
+    if(counts){$("ct-"+k).value=on?a:"";$("jt-"+k).value=on?j:"";}$("ct-"+k).disabled=!on;$("jt-"+k).disabled=!on;});
+  // 通常・求人のうち、回数があるほうの入力欄だけ出す
+  const ad=cnt("ad")>0||!total(), job=cnt("job")>0;
+  $("ad-size").hidden=!ad;$("job-size").hidden=!job;$("goal-box").hidden=!ad;$("job-box").hidden=!job;
+  $("feat-label").textContent=jobOnly()?"職場の魅力 3点":"お店の魅力 3点";
+  $("run").textContent=mixed()?"業種と求人のおすすめで組む":jobOnly()?"求人のおすすめで組む":"業種のおすすめで組む";
+  $("src-label").textContent=mixed()?`${PRICE_SOURCE}と${JOB_PRICE_SOURCE}`:jobOnly()?JOB_PRICE_SOURCE:PRICE_SOURCE;
   document.querySelectorAll("#kind button").forEach(b=>b.classList.toggle("on",b.dataset.k===st.kind));
-  $("f-size").innerHTML=job?JOB_SIZES.map(s=>`<option value="${s}" ${s===st.jobSize?"selected":""}>${s}枠</option>`).join("")
-    :SIZES[st.kind].map(s=>`<option ${s===st.size?"selected":""}>${s}</option>`).join("");
+  $("f-size").innerHTML=SIZES[st.kind].map(s=>`<option ${s===st.size?"selected":""}>${s}</option>`).join("");
+  $("f-jobsize").innerHTML=JOB_SIZES.map(s=>`<option value="${s}" ${s===st.jobSize?"selected":""}>${s}枠</option>`).join("");
   const e=earliestIssue();let opts="";for(let i=0;i<6;i++){const o=addM(e.y,e.m,i);const d=deadlines(o);
     opts+=`<option value="${issueKey(o)}" ${issueKey(o)===issueKey(st.start)?"selected":""}>${issueLabel(o)}（最終締切 ${d.final}）</option>`;}
   $("f-start").innerHTML=opts;
@@ -327,27 +349,30 @@ function syncInputs(counts=true){
 }
 
 /* ---------- 料金 ---------- */
+// 料金ランクは、通常と求人を合わせた合計回数で決まる
 function calc(){
-  if(isJob())return calcJob();
-  const n=total(), ti=tierIdx(n), eds=selEds(), errs=[];
-  const lines=eds.map(k=>{const tbl=P[k][st.kind][st.size];if(!tbl){errs.push(`${ED[k].name}に${st.kind==="free"?"フリー":"定型"}${st.size}はありません`);return null;}
-    const unit=tbl[ti]; if(unit==null){errs.push(`${st.size}は年6回以上の契約のみです`);return null;}
-    return {k,unit,cnt:st.eds[k],sum:unit*st.eds[k]};}).filter(Boolean);
+  const n=total(), errs=[], lines=[];
+  TYPES.forEach(type=>selEds(type).forEach(k=>{const unit=unitPrice(type,k,n),c=edsOf(type)[k];
+    if(unit===undefined){errs.push(`${ED[k].name}に${st.kind==="free"?"フリー":"定型"}${st.size}はありません`);return;}
+    if(unit===null){errs.push(`${st.size}は年6回以上の契約のみです`);return;}
+    lines.push({type,k,unit,cnt:c,sum:unit*c});}));
   const ad=lines.reduce((a,l)=>a+l.sum,0);
-  const prodUnit=st.kind==="free"&&st.prod?(PROD[st.size]||0):0, prod=prodUnit*n;
-  const mk=mainEd(); let base=null;
-  if(mk&&P[mk][st.kind][st.size]&&!COVER.includes(st.size)){const u=P[mk][st.kind][st.size][2];base={k:mk,unit:u,sum:u*3,prod:prodUnit*3};}
-  const avg=n?Math.round(ad/n):0;
-  return {n,ti,lines,ad,prodUnit,prod,total:ad+prod,base,avg,errs:[...new Set(errs)]};
+  const prodUnit=st.kind==="free"&&st.prod?(PROD[st.size]||0):0, prod=prodUnit*cnt("ad");
+  let base=null, sep=null;
+  if(mixed()){
+    // 比べる相手: 通常と求人を別々に申し込んだ場合（それぞれ自分の回数で料金ランクが決まる）
+    let s=0,ok=true;TYPES.forEach(type=>selEds(type).forEach(k=>{const u=unitPrice(type,k,cnt(type));if(u==null)ok=false;else s+=u*edsOf(type)[k];}));
+    if(ok)sep={sum:s,diff:s-ad};
+  }else if(n){
+    // 比べる相手: 通常は「年3回」、求人は「年1回の料金で3回」
+    const type=usedTypes()[0],mk=mainEd(type);
+    if(type==="job")base={type,k:mk,unit:unitPrice("job",mk,1)};
+    else if(!COVER.includes(st.size)){const u=unitPrice("ad",mk,3);if(u!=null)base={type,k:mk,unit:u};}
+    if(base)base.sum=base.unit*3;
+  }
+  return {n,lines,ad,prodUnit,prod,total:ad+prod,base,sep,avg:n?Math.round(ad/n):0,errs:[...new Set(errs)]};
 }
-// 求人広告: 一宮・稲沢版だけ別の料金、ほかの5版は共通。制作費は入れない。比べる相手は「年1回の料金で3回」
-function calcJob(){
-  const n=total(), ti=jobTierIdx(n), tbl=k=>JOB_P[k==="ichinomiya"?"ichinomiya":"other"][st.jobSize];
-  const lines=selEds().map(k=>{const unit=tbl(k)[ti];return {k,unit,cnt:st.eds[k],sum:unit*st.eds[k]};});
-  const ad=lines.reduce((a,l)=>a+l.sum,0), mk=mainEd();
-  const base=mk?{k:mk,unit:tbl(mk)[0],sum:tbl(mk)[0]*3,prod:0}:null;
-  return {n,ti,lines,ad,prodUnit:0,prod:0,total:ad,base,avg:n?Math.round(ad/n):0,errs:[]};
-}
+function baseName(b){return b.type==="job"?"年1回の料金で3回":"年3回";}
 
 /* ---------- 好機 ---------- */
 function issuesRange(){const a=[];for(let i=0;i<12;i++)a.push(addM(st.start.y,st.start.m,i));return a;}
@@ -361,49 +386,60 @@ function rivalInfo(){const r=parseYM(st.rivalM);if(!r)return null;const range=is
   const k=issueKey(r),inRange=range.some(x=>issueKey(x)===k),prev=addM(r.y,r.m,-1);
   return {o:r,prev,inRange,prevIn:range.some(x=>issueKey(x)===issueKey(prev)),what:st.rival};}
 
-/* ---------- 業種のおすすめで組む ---------- */
-// 点数: ◎ピーク5・○2・その他1、周年+3（節目+4）、同業店オープン前・当月+2。
+/* ---------- おすすめで組む ---------- */
+// 号ごとの点数: ◎ピーク5・○2・その他1、周年+3（節目+4）、同業店オープン前・当月+2。
 // ai があれば、AIが付けた「このお店にとっての価値」（1〜5）×3 と、AIのおすすめ（best）+4 を足し、理由とテーマもAIの文を使う。
-// 点数の合計が高く、掲載の間が空きすぎない組み合わせを選ぶ。
-function autoPlan(ai){
-  const n=total(); if(!n)return null;
-  const ind=season(), job=isJob(), a=annivInfo(), r=rivalInfo();
-  const range=issuesRange();
-  const cands=range.filter(o=>deadlines(o).finalDate>=today).map(o=>{
-    const k=issueKey(o), am=ai&&ai.byM.get(o.m); let score=1, why=[];
+function candsFor(type,ai){
+  const ind=season(type), job=type==="job", a=annivInfo(), r=rivalInfo(), at=ai&&ai[type];
+  return issuesRange().filter(o=>deadlines(o).finalDate>=today).map(o=>{
+    const k=issueKey(o), am=at&&at.byM.get(o.m); let score=1, why=[];
     if(ind.peak.includes(o.m)){score=5;why.push(job?"応募がいちばん集まりやすい時期":"一年でいちばん需要が高まる時期");}
     else if(ind.good.includes(o.m)){score=2;why.push(job?"応募が動きやすい時期":"需要が伸びる時期");}
     if(a&&issueKey(a.o)===k){score+=a.milestone?4:3;why.unshift(`${a.years}周年の号`);}
     if(r&&(issueKey(r.prev)===k||issueKey(r.o)===k)){score+=2;why.push(job?"近くの新しいお店より先に人を集める":"このエリアで先に知ってもらう");}
     if(ind.peak.includes(o.m+1)||(o.m===12&&ind.peak.includes(1)))why.push(job?"翌月の山の前に早めに知ってもらう":"翌月の山に向けた予約・予告");
-    if(ai)score+=(am?am.score*3:0)+(ai.best.has(o.m)?4:0);
-    return {...o,k,score,why,am};});
-  // 候補は最大12号なので、すべての組み合わせを試して一番よいものを選ぶ
-  const want=Math.min(n,cands.length);let chosen=[],bv=-Infinity;
-  const peakMust=ind.peak.filter(m=>cands.some(c=>c.m===m));
-  for(let mask=0;mask<(1<<cands.length);mask++){
-    let bits=0;for(let x=mask;x;x&=x-1)bits++;if(bits!==want)continue;
-    const pick=cands.filter((c,i)=>mask&(1<<i));
-    let v=pick.reduce((a,c)=>a+c.score,0)*10;
-    // 業種のピーク号は必ず入れる
-    v-=1000*peakMust.filter(m=>!pick.some(c=>c.m===m)).length;
-    // 年をまたいで同じ組み方を続けるので、最後の号から翌年の最初の号までの間も数える
-    for(let i=0;i<pick.length;i++){const g=i?pick[i].k-pick[i-1].k:pick[0].k+12-pick[pick.length-1].k;if(g>3)v-=1000*(g-3);v-=g*g;}
-    if(v>bv){bv=v;chosen=pick;}
-  }
-  // 点数の高い号から、回数の多い版（メイン版）を割り当てる
-  const slots=[];selEds().sort((x,y)=>st.eds[y]-st.eds[x]).forEach(k=>{for(let i=0;i<st.eds[k];i++)slots.push(k);});
-  const byScore=chosen.slice().sort((x,y)=>y.score-x.score||x.k-y.k);
-  byScore.forEach((c,i)=>c.ed=slots[i]||mainEd());
-  return chosen.sort((x,y)=>x.k-y.k).map(c=>c.am&&c.am.reason?{y:c.y,m:c.m,ed:c.ed,reason:c.am.reason,angle:c.am.angle}:{y:c.y,m:c.m,ed:c.ed,
-    reason:`${themeOf(c.m)}${isJob()?"。":"の時期。"}`+(c.why.length?c.why.join("、")+"。":"前後の号との間をつなぐ。"),
-    angle:"",rule:true});
+    if(at)score+=(am?am.score*3:0)+(at.best.has(o.m)?4:0);
+    return {...o,k,score,why,am,type};});
 }
+function bitcount(x){let b=0;for(;x;x&=x-1)b++;return b;}
+// その種類の回数ぶんの号の組み合わせを全部作り、点数の高い順に並べる（ピーク号が欠けると大きく減点）
+function setsFor(type,ai){
+  const want=cnt(type); if(!want)return [{pick:[],v:0}];
+  const cands=candsFor(type,ai), w=Math.min(want,cands.length), peakMust=season(type).peak.filter(m=>cands.some(c=>c.m===m)), out=[];
+  for(let mask=0;mask<(1<<cands.length);mask++){
+    if(bitcount(mask)!==w)continue;
+    const pick=cands.filter((c,i)=>mask&(1<<i));
+    out.push({pick,v:pick.reduce((s,c)=>s+c.score,0)*10-1000*peakMust.filter(m=>!pick.some(c=>c.m===m)).length});
+  }
+  return out.sort((x,y)=>y.v-x.v);
+}
+// 掲載の間: 3か月を超えたら大きく減点、なるべく均等に。年をまたいで同じ組み方を続けるので最後の号から翌年の最初の号までも数える
+function gapPenalty(keys){let v=0;for(let i=0;i<keys.length;i++){const g=i?keys[i]-keys[i-1]:keys[0]+12-keys[keys.length-1];if(g>3)v+=1000*(g-3);v+=g*g;}return v;}
+function autoPlan(ai){
+  if(!total())return null;
+  // 通常と求人は別々に採点し、両方を合わせたときの掲載の間で選ぶ（同じ号に両方載ってもよいが、少しだけ散らす）
+  const lim=mixed()?150:Infinity, A=setsFor("ad",ai).slice(0,lim), J=setsFor("job",ai).slice(0,lim);
+  let best=[],bv=-Infinity;
+  for(const x of A)for(const y of J){
+    const keys=[...new Set([...x.pick,...y.pick].map(c=>c.k))].sort((p,q)=>p-q);
+    const v=x.v+y.v-gapPenalty(keys)-15*(x.pick.length+y.pick.length-keys.length);
+    if(v>bv){bv=v;best=[...x.pick,...y.pick];}
+  }
+  const out=[];
+  TYPES.forEach(type=>{const chosen=best.filter(c=>c.type===type);if(!chosen.length)return;
+    // 点数の高い号から、回数の多い版（メイン版）を割り当てる
+    const e=edsOf(type),slots=[];selEds(type).sort((x,y)=>e[y]-e[x]).forEach(k=>{for(let i=0;i<e[k];i++)slots.push(k);});
+    chosen.slice().sort((x,y)=>y.score-x.score||x.k-y.k).forEach((c,i)=>c.ed=slots[i]||mainEd(type));
+    chosen.forEach(c=>out.push(c.am&&c.am.reason?{y:c.y,m:c.m,ed:c.ed,type,reason:c.am.reason,angle:c.am.angle}:{y:c.y,m:c.m,ed:c.ed,type,
+      reason:`${themeOf(type,c.m)}${type==="job"?"。":"の時期。"}`+(c.why.length?c.why.join("、")+"。":"前後の号との間をつなぐ。"),angle:"",rule:true}));});
+  return out.sort(pickOrder);
+}
+function pickOrder(a,b){return issueKey(a)-issueKey(b)||(a.type===b.type?0:a.type==="ad"?-1:1);}
 function runAuto(){
   if(!total()){$("status").textContent="掲載版を選んでください。";return;}
   if(st.picks.length&&!confirm("今の掲載号の表を、おすすめの内容で置き換えます。よろしいですか？"))return;
-  const p=autoPlan(); st.picks=p||[];
-  if(st.picks.length<total())$("status").textContent=`締切前の号が${st.picks.length}つしかありません。開始の号を確認してください。`;
+  const p=autoPlan()||[];p.forEach(x=>delete x.rule);st.picks=p;
+  if(st.picks.length<total())$("status").textContent=`締切前の号が足りません。開始の号を確認してください。`;
   else $("status").textContent="たたき台を入れました。理由とテーマはお店に合わせて書き直してください。";
   renderAll();
 }
@@ -417,96 +453,112 @@ function renderChance(){
 }
 function renderCounts(){
   const n=total();const el=$("count-msg");
-  if(!n){el.className="msg bad";el.textContent="掲載版を1つ以上選んでください。";return;}
+  if(!n){el.className="msg bad";el.textContent="掲載版と回数を1つ以上入れてください。";return;}
   el.className=n===6?"msg info":"msg warn";
-  el.textContent=`合計 ${n}回 → 料金は「${planTierName(n)}」の単価で計算します。`+(n!==6?"（このページは年6回を想定しています）":"");
+  el.textContent=`合計 ${n}回${mixed()?`（通常${cnt("ad")}回＋求人${cnt("job")}回）`:""} → 料金は${usedTypes().map(t=>(mixed()?TYPE_NAME[t]+"が":"")+"「"+tierLabel(t,n)+"」").join("、")}の単価で計算します。`+(n!==6?"（このページは年6回を想定しています）":"");
 }
 function renderPicks(){
-  const range=issuesRange();
+  const range=issuesRange(), mix=mixed(), cols=mix?7:6;
+  $("picks-head").innerHTML=`<tr><th>#</th><th>号</th>${mix?"<th>種類</th>":""}<th>版</th><th>申込（理想／最終）</th><th>載せる理由</th><th>原稿のテーマ</th></tr>`;
   const opts=range.map(o=>`<option value="${issueKey(o)}">${issueLabel(o)}</option>`).join("");
-  if(!st.picks.length){$("picks").innerHTML=`<tr><td colspan="6" class="hint">まだ号が入っていません。「業種のおすすめで組む」を押すか、下の「1行ふやす」で入れてください。</td></tr>`;}
+  if(!st.picks.length){$("picks").innerHTML=`<tr><td colspan="${cols}" class="hint">まだ号が入っていません。「おすすめで組む」を押すか、下の「1行ふやす」で入れてください。</td></tr>`;}
   else $("picks").innerHTML=st.picks.map((p,i)=>{const d=deadlines(p);
     const late=d.finalDate<today?"<br><span style='color:var(--bad)'>締切済み</span>":(d.idealDate<today?"<br><span style='color:var(--warn)'>急ぎ</span>":"");
     return `<tr><td>${i+1}<br><button type="button" data-del="${i}" aria-label="${i+1}行目を消す" style="padding:0 6px;font-size:12px">×</button></td>
     <td><select data-i="${i}" data-f="iss" aria-label="${i+1}回目の号">${opts}</select></td>
+    ${mix?`<td><select data-i="${i}" data-f="type" aria-label="${i+1}回目の種類">${TYPES.map(t=>`<option value="${t}" ${t===p.type?"selected":""}>${TYPE_NAME[t]}</option>`).join("")}</select></td>`:""}
     <td><select data-i="${i}" data-f="ed" aria-label="${i+1}回目の版">${ED_ORDER.map(k=>`<option value="${k}" ${k===p.ed?"selected":""}>${ED[k].short}</option>`).join("")}</select></td>
     <td class="num">${d.ideal}／${d.final}${late}</td>
     <td><textarea data-i="${i}" data-f="reason" aria-label="${i+1}回目の理由">${esc(p.reason)}</textarea></td>
-    <td><textarea data-i="${i}" data-f="angle" aria-label="${i+1}回目のテーマ" placeholder="例: 母の日はメッセージ入りギフト">${esc(p.angle)}</textarea></td></tr>`;}).join("");
-  $("picks").insertAdjacentHTML("beforeend",`<tr><td colspan="6"><button type="button" id="add-row">＋ 1行ふやす</button></td></tr>`);
-  $("add-row").addEventListener("click",()=>{const used=st.picks.map(issueKey);const o=range.find(x=>!used.includes(issueKey(x))&&deadlines(x).finalDate>=today)||range[0];
-    st.picks.push({y:o.y,m:o.m,ed:mainEd()||ED_ORDER[0],reason:"",angle:""});st.picks.sort((a,b)=>issueKey(a)-issueKey(b));renderAll();});
+    <td><textarea data-i="${i}" data-f="angle" aria-label="${i+1}回目のテーマ" placeholder="${p.type==="job"?"例: 4月入職歓迎・未経験OK":"例: 母の日はメッセージ入りギフト"}">${esc(p.angle)}</textarea></td></tr>`;}).join("");
+  $("picks").insertAdjacentHTML("beforeend",`<tr><td colspan="${cols}"><button type="button" id="add-row">＋ 1行ふやす</button></td></tr>`);
+  $("add-row").addEventListener("click",()=>{
+    // まだ足りない種類の行をふやす
+    const type=usedTypes().find(t=>st.picks.filter(p=>p.type===t).length<cnt(t))||usedTypes()[0]||"ad";
+    const used=st.picks.filter(p=>p.type===type).map(issueKey);const o=range.find(x=>!used.includes(issueKey(x))&&deadlines(x).finalDate>=today)||range[0];
+    st.picks.push({y:o.y,m:o.m,ed:mainEd(type)||ED_ORDER[0],type,reason:"",angle:""});st.picks.sort(pickOrder);renderAll();});
   $("picks").querySelectorAll("button[data-del]").forEach(b=>b.addEventListener("click",()=>{st.picks.splice(+b.dataset.del,1);renderAll();}));
   $("picks").querySelectorAll("select[data-f=iss]").forEach(s=>{const p=st.picks[+s.dataset.i];s.value=issueKey(p);
     if(s.value===""){s.insertAdjacentHTML("afterbegin",`<option value="${issueKey(p)}">${issueLabel(p)}</option>`);s.value=issueKey(p);}});
   $("picks").querySelectorAll("select[data-i],textarea[data-i]").forEach(c=>c.addEventListener(c.tagName==="SELECT"?"change":"input",e=>{
     const p=st.picks[+c.dataset.i],f=c.dataset.f;
-    if(f==="iss"){const k=+c.value;p.y=Math.floor(k/12);p.m=k%12+1;st.picks.sort((a,b)=>issueKey(a)-issueKey(b));renderPicks();}
-    else if(f==="ed"){p.ed=c.value;renderPickMsg();}
+    if(f==="iss"){const k=+c.value;p.y=Math.floor(k/12);p.m=k%12+1;st.picks.sort(pickOrder);renderPicks();}
+    else if(f==="ed"||f==="type"){p[f]=c.value;renderPickMsg();}
     else p[f]=c.value;
     renderPrice();renderSheet();save();}));
   renderPickMsg();
 }
 function renderPickMsg(){
   if(!st.picks.length){$("pick-msg").innerHTML="";return;}
-  const msgs=[],cnt={};st.picks.forEach(p=>cnt[p.ed]=(cnt[p.ed]||0)+1);
-  ED_ORDER.forEach(k=>{const want=st.eds[k]||0,have=cnt[k]||0;if(want!==have)msgs.push(`${ED[k].short}: 条件は${want}回、表は${have}回`);});
-  if(st.picks.length!==total())msgs.unshift(`表の行数（${st.picks.length}）と合計回数（${total()}）が違います。`);
-  const ks=st.picks.map(issueKey).sort((a,b)=>a-b);let gap=0;for(let i=1;i<ks.length;i++)gap=Math.max(gap,ks[i]-ks[i-1]);
+  const msgs=[], mix=mixed(), range=issuesRange();
+  if(st.picks.length!==total())msgs.push(`表の行数（${st.picks.length}）と合計回数（${total()}）が違います。`);
+  TYPES.forEach(type=>{
+    const rows=st.picks.filter(p=>p.type===type),c={},e=edsOf(type),label=mix||type==="job"?`（${TYPE_NAME[type]}）`:"";
+    rows.forEach(p=>c[p.ed]=(c[p.ed]||0)+1);
+    ED_ORDER.forEach(k=>{const want=e[k]||0,have=c[k]||0;if(want!==have)msgs.push(`${ED[k].short}${label}: 条件は${want}回、表は${have}回`);});
+    if(!cnt(type))return;
+    const months=new Set(rows.map(p=>p.m));
+    const miss=season(type).peak.filter(m=>!months.has(m)&&range.some(o=>o.m===m&&deadlines(o).finalDate>=today));
+    if(miss.length)msgs.push(`${type==="job"?"求人":"この業種"}のいちばんの山（${miss.map(m=>m+"月号").join("・")}）が入っていません。`);
+  });
+  const ks=[...new Set(st.picks.map(issueKey))].sort((a,b)=>a-b);let gap=0;for(let i=1;i<ks.length;i++)gap=Math.max(gap,ks[i]-ks[i-1]);
   if(gap>=4)msgs.push(`掲載の間が${gap}か月空くところがあります（3か月以内が目安）。`);
-  const ind=season(),months=new Set(st.picks.map(p=>p.m));
-  const miss=ind.peak.filter(m=>!months.has(m)&&issuesRange().some(o=>o.m===m&&deadlines(o).finalDate>=today));
-  if(miss.length)msgs.push(`${isJob()?"求人":"この業種"}のいちばんの山（${miss.map(m=>m+"月号").join("・")}）が入っていません。`);
   $("pick-msg").innerHTML=msgs.length?`<div class="msg warn">${msgs.map(esc).join("<br>")}</div>`:"";
 }
 function renderPrice(){
   const c=calc();
   if(c.errs.length){$("price").innerHTML=`<tr><td colspan="4"><div class="msg bad">${c.errs.map(esc).join("<br>")}</div></td></tr>`;$("price-note").textContent="";$("cond-msg").innerHTML=`<div class="msg bad">${c.errs.map(esc).join("<br>")}</div>`;return;}
   $("cond-msg").innerHTML="";
-  let h=c.lines.map(l=>`<tr><td>${ED[l.k].name} ${sizeName()}（${planTierName(c.n)}）</td><td class="num">${yen(l.unit)}</td><td class="num">${l.cnt}</td><td class="num">${yen(l.sum)}</td></tr>`).join("");
-  if(c.prod)h+=`<tr><td>制作費</td><td class="num">${yen(c.prodUnit)}</td><td class="num">${c.n}</td><td class="num">${yen(c.prod)}</td></tr>`;
+  let h=c.lines.map(l=>`<tr><td>${ED[l.k].name} ${sizeName(l.type)}（${tierLabel(l.type,c.n)}）</td><td class="num">${yen(l.unit)}</td><td class="num">${l.cnt}</td><td class="num">${yen(l.sum)}</td></tr>`).join("");
+  if(c.prod)h+=`<tr><td>制作費（通常の広告）</td><td class="num">${yen(c.prodUnit)}</td><td class="num">${cnt("ad")}</td><td class="num">${yen(c.prod)}</td></tr>`;
   h+=`<tr><td><b>合計（税別）</b></td><td></td><td></td><td class="num"><b>${yen(c.total)}</b></td></tr>`;
   h+=`<tr><td>税込</td><td></td><td></td><td class="num">${yen(Math.round(c.total*1.1))}</td></tr>`;
-  if(c.base)h+=`<tr><td style="color:var(--muted)">比較：${ED[c.base.k].short}だけで年3回</td><td class="num">${yen(c.base.unit)}</td><td class="num">3</td><td class="num">${yen(c.base.sum)}</td></tr>`;
+  if(c.base)h+=`<tr><td style="color:var(--muted)">比較：${ED[c.base.k].short}だけで${baseName(c.base)}</td><td class="num">${yen(c.base.unit)}</td><td class="num">3</td><td class="num">${yen(c.base.sum)}</td></tr>`;
+  if(c.sep)h+=`<tr><td style="color:var(--muted)">比較：通常と求人を別々に申し込んだ場合（掲載料）</td><td></td><td></td><td class="num">${yen(c.sep.sum)}</td></tr>`;
   $("price").innerHTML=h;
   let note="";
   if(c.base&&c.n>3){const diff=c.base.unit-c.avg,rate=Math.round(diff/c.base.unit*1000)/10,extra=Math.round((c.ad-c.base.sum)/(c.n-3));
-    note=`1回あたり ${yen(c.avg)}円（年3回より ${yen(diff)}円・▲${rate}%）。追加の${c.n-3}回は実質1回 ${yen(extra)}円。`;}
-  if(st.kind==="free"&&c.prod)note+=" 制作費は原稿を作るたびに計上しています。";
+    note=`1回あたり ${yen(c.avg)}円（${baseName(c.base)}より ${yen(diff)}円・▲${rate}%）。追加の${c.n-3}回は実質1回 ${yen(extra)}円。`;}
+  if(c.sep&&c.sep.diff>0)note=`通常${cnt("ad")}回と求人${cnt("job")}回を合わせて年${c.n}回の料金になります。別々に申し込むより掲載料が ${yen(c.sep.diff)}円おトク。`;
+  if(c.prod)note+=" 制作費は通常の広告の原稿を作るたびに計上しています。";
   $("price-note").textContent=note;
 }
 function sheetHTML(){
-  const c=calc(), range=issuesRange(), picks=st.picks.slice().sort((a,b)=>issueKey(a)-issueKey(b));
-  const byKey={};picks.forEach(p=>(byKey[issueKey(p)]=byKey[issueKey(p)]||[]).push(p.ed));
+  const c=calc(), range=issuesRange(), picks=st.picks.slice().sort(pickOrder), mix=mixed(), job=jobOnly();
+  const byKey={};picks.forEach(p=>(byKey[issueKey(p)]=byKey[issueKey(p)]||[]).push(p));
   const ds=`${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日`;
   const usedEds=[...new Set(picks.map(p=>p.ed))];
-  const size=sizeName(), job=isJob();
+  const size=usedTypes().map(t=>(mix?TYPE_NAME[t]+"：":"")+sizeName(t)).join("／");
   const ai=annivInfo();
   const tl=range.map(o=>{const e=byKey[issueKey(o)];
-    const bg=e?(e.length>1?`linear-gradient(135deg,${ED[e[0]].color} 50%,${ED[e[1]].color} 50%)`:ED[e[0]].color):"";
+    const bg=e?(e.length>1?`linear-gradient(135deg,${ED[e[0].ed].color} 50%,${ED[e[1].ed].color} 50%)`:ED[e[0].ed].color):"";
+    const what=!e?"":mix?[...new Set(e.map(p=>TYPE_NAME[p.type]))].join("＋"):"掲載";
     const an=ai&&issueKey(ai.o)===issueKey(o)?`<br>${ai.years}周年`:"";
-    return `<div class="${e?"hit":""}" style="${e?`background:${bg}`:""}"><span class="y">${o.m===1||issueKey(o)===issueKey(range[0])?o.y+"年":"&nbsp;"}</span><b>${o.m}月</b>${e?"掲載":""}${an}</div>`;}).join("");
-  const rows=picks.map((p,i)=>{const d=deadlines(p);return `<tr><td class="n">${i+1}</td><td style="white-space:nowrap"><b>${issueLabel(p)}</b></td>
+    return `<div class="${e?"hit":""}" style="${e?`background:${bg}`:""}"><span class="y">${o.m===1||issueKey(o)===issueKey(range[0])?o.y+"年":"&nbsp;"}</span><b>${o.m}月</b>${what}${an}</div>`;}).join("");
+  const rows=picks.map((p,i)=>{const d=deadlines(p);return `<tr><td class="n">${i+1}</td><td style="white-space:nowrap"><b>${issueLabel(p)}</b>${mix?`<br><span class="typetag ${p.type}">${TYPE_NAME[p.type]}</span>`:""}</td>
     <td><span class="edtag" style="background:${ED[p.ed].color}">${ED[p.ed].short}</span></td>
     <td class="n">${distText(p.ed,p)}</td><td class="n">${d.ideal}</td><td>${esc(p.reason)}</td><td>${esc(p.angle)}</td></tr>`;}).join("");
   let price="";
   if(!c.errs.length&&c.n){
-    const lines=c.lines.map(l=>`<tr><td>${ED[l.k].short} ${size}</td><td class="n">${yen(l.unit)}円 × ${l.cnt}回</td><td class="n">${yen(l.sum)}円</td></tr>`).join("");
-    const prod=c.prod?`<tr><td>制作費</td><td class="n">${yen(c.prodUnit)}円 × ${c.n}回</td><td class="n">${yen(c.prod)}円</td></tr>`:"";
-    const save=c.base&&c.n>3?`<div class="save"><small>${ED[c.base.k].short}版で年3回の場合（1回 ${yen(c.base.unit)}円）と比べて</small><span class="big">1回あたり ${yen(c.base.unit-c.avg)}円おトク</span><small>このプランの1回あたり掲載料 ${yen(c.avg)}円（▲${Math.round((c.base.unit-c.avg)/c.base.unit*1000)/10}%）</small></div>`
-      :`<div class="save"><small>料金プラン</small><span class="big">${planTierName(c.n)}</span><small>全版の合計回数で料金ランクが決まります</small></div>`;
+    const lines=c.lines.map(l=>`<tr><td>${ED[l.k].short} ${sizeName(l.type)}</td><td class="n">${yen(l.unit)}円 × ${l.cnt}回</td><td class="n">${yen(l.sum)}円</td></tr>`).join("");
+    const prod=c.prod?`<tr><td>制作費</td><td class="n">${yen(c.prodUnit)}円 × ${cnt("ad")}回</td><td class="n">${yen(c.prod)}円</td></tr>`:"";
+    const save=c.sep&&c.sep.diff>0?`<div class="save"><small>通常と求人を別々に申し込む場合（掲載料 ${yen(c.sep.sum)}円）と比べて</small><span class="big">${yen(c.sep.diff)}円おトク</span><small>合計年${c.n}回の料金が、通常・求人の両方に使えます</small></div>`
+      :c.base&&c.n>3?`<div class="save"><small>${ED[c.base.k].short}版で${baseName(c.base)}の場合（1回 ${yen(c.base.unit)}円）と比べて</small><span class="big">1回あたり ${yen(c.base.unit-c.avg)}円おトク</span><small>このプランの1回あたり掲載料 ${yen(c.avg)}円（▲${Math.round((c.base.unit-c.avg)/c.base.unit*1000)/10}%）</small></div>`
+      :`<div class="save"><small>料金プラン</small><span class="big">${tierLabel(usedTypes()[0],c.n)}</span><small>全版の合計回数で料金ランクが決まります</small></div>`;
+    const src=mix?`${PRICE_SOURCE}・${JOB_PRICE_SOURCE}`:job?JOB_PRICE_SOURCE:PRICE_SOURCE;
     price=`<div class="price"><table><thead><tr><th>内訳（税別）</th><th style="text-align:right">単価 × 回数</th><th style="text-align:right">金額</th></tr></thead><tbody>${lines}${prod}
       <tr><td><b>合計</b></td><td class="n">税込 ${yen(Math.round(c.total*1.1))}円</td><td class="n"><b>${yen(c.total)}円</b></td></tr></tbody></table>${save}</div>
-      <p class="note">※料金は${esc(job?JOB_PRICE_SOURCE:PRICE_SOURCE)}の正規料金です。${job?"年6回以上の料金は":"年6〜8回の料金は"}、複数の版にまたがる場合も合計回数で適用します。${c.prod?"制作費は原稿を作成する回ごとに計上しています。":""}</p>`;
+      <p class="note">※料金は${esc(src)}の正規料金です。${mix?"通常の広告と求人広告を合わせた回数で料金ランクが決まり、":""}複数の版にまたがる場合も合計回数で適用します。${c.prod?"制作費は通常の広告の原稿を作成する回ごとに計上しています。":""}</p>`;
   }
   const feats=(st.features||[]).slice(0,3).map(f=>`<div>${esc(f)}</div>`).join("");
   const copies=usedEds.map(k=>`${ED[k].short} ${ED[k].copies.toLocaleString()}部`).join("／");
+  const title=job?`まちJOB 年${c.n}回 求人掲載プランのご提案`:`くれよん 年${c.n}回 掲載プランのご提案${mix?`<small style="font-size:14px;font-weight:700"> （通常${cnt("ad")}回＋求人${cnt("job")}回）</small>`:""}`;
   return `<div class="s-top"><div class="brand"><small>地域みっちゃく生活情報誌</small>くれよん</div>
     <div class="meta">${ds}<br>株式会社ケイ・クリエイト${st.staff?`<br>担当：${esc(st.staff)}`:""}${st.tel?`　TEL ${esc(st.tel)}`:""}</div></div>
-    <h1 class="s-title"><span>${esc(st.name||"お客様")} 様</span>${job?"まちJOB 年"+c.n+"回 求人掲載プランのご提案":"くれよん 年"+c.n+"回 掲載プランのご提案"}</h1>
+    <h1 class="s-title"><span>${esc(st.name||"お客様")} 様</span>${title}</h1>
     ${st.headline?`<p class="catch">${esc(st.headline)}</p>`:""}
     ${feats?`<div class="sec"><h4>${job?"職場の魅力":"お店の魅力"}</h4><div class="feat">${feats}</div></div>`:""}
-    <div class="sec"><h4>掲載スケジュール（${size}）</h4><div class="tl">${tl}</div></div>
+    <div class="sec"><h4>掲載スケジュール（${esc(size)}）</h4><div class="tl">${tl}</div></div>
     <div class="sec"><table><thead><tr><th>#</th><th>号</th><th>版</th><th>配布</th><th>お申込み目安</th><th>この号に載せる理由</th><th>原稿のテーマ</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="sec"><h4>料金</h4>${price}</div>
     <div class="sec"><h4>年6回をおすすめする理由</h4><div class="why">
@@ -532,17 +584,20 @@ function getPass(){try{return localStorage.getItem(PASS_KEY)||"";}catch(e){retur
 function setPass(v){try{v?localStorage.setItem(PASS_KEY,v):localStorage.removeItem(PASS_KEY);}catch(e){}}
 // AIの採点（号ごとの価値・理由・テーマ）をもとに、締切・掲載の間・ピーク号・版の回数のルールで号を決める
 function planFromAI(d){
-  const byM=new Map((d.months||[]).map(m=>[m.m,m]));
-  const picks=autoPlan({byM,best:new Set(d.best||[])})||[];
+  const mk=(arr,best)=>({byM:new Map((arr||[]).map(m=>[m.m,m])),best:new Set(best||[])});
+  const ai=jobOnly()?{job:mk(d.months,d.best)}:{ad:mk(d.months,d.best),job:mixed()?mk(d.jobMonths,d.jobBest):null};
+  const picks=autoPlan(ai)||[];
   const filled=picks.filter(p=>p.rule).length;
   picks.forEach(p=>delete p.rule);
   return {picks,notes:filled?[`${filled}回分はAIの文がなかったので、理由を決まった文で入れました。テーマを書き足してください`]:[]};
 }
 function seasonText(){
-  const ind=season(), job=isJob();
-  return (job?"【月ごとの仕事探しの動き】"+Object.entries(JOB_MONTH_THEME).map(([m,t])=>`${m}月号:${t}`).join("／")+"\n":"")+
-    "【月ごとの出来事（尾張）】"+Object.entries(MONTH_THEME).map(([m,t])=>`${m}月号:${t}`).join("／")+
-    `\n【${job?"求人":"この業種"}のピーク号】${ind.peak.length?"◎"+ind.peak.join(","):"なし"}${ind.good.length?" ○"+ind.good.join(","):""}`;
+  const peaks=(label,s)=>`\n【${label}のピーク号】${s.peak.length?"◎"+s.peak.join(","):"なし"}${s.good.length?" ○"+s.good.join(","):""}`;
+  let t="【月ごとの出来事（尾張）】"+Object.entries(MONTH_THEME).map(([m,v])=>`${m}月号:${v}`).join("／");
+  if(cnt("job"))t="【月ごとの仕事探しの動き】"+Object.entries(JOB_MONTH_THEME).map(([m,v])=>`${m}月号:${v}`).join("／")+"\n"+t;
+  if(cnt("ad"))t+=peaks("この業種",season("ad"));
+  if(cnt("job"))t+=peaks("求人",JOB_SEASON);
+  return t;
 }
 function chanceText(){
   const a=annivInfo(),r=rivalInfo(),L=[];
@@ -553,12 +608,12 @@ function chanceText(){
 async function runAI(){
   const ms=$("status");
   if(!st.name.trim()){ms.textContent="お客様名を入れてください。";return;}
-  if(!total()){ms.textContent="掲載版を選んでください。";return;}
+  if(!total()){ms.textContent="掲載版と回数を入れてください。";return;}
   if(!st.url.trim()&&!st.paste.trim()&&st.memo.trim().length<30){ms.textContent="お店のサイトのURLを入れるか、担当者が知っていることを書いてください。";return;}
   if((st.picks.length||st.features.length)&&!confirm("今のプラン（キャッチ・魅力・掲載号の表）を、AIの案で置き換えます。よろしいですか？"))return;
-  const range=issuesRange();
-  const body={url:st.url.trim(),text:st.paste.trim(),memo:st.memo.trim(),name:st.name,industry:st.ind,goal:isJob()?"":st.goal,mode:st.mode,job:isJob()?st.job.trim():"",
-    eds:selEds().map(k=>({key:k,name:ED[k].name,count:st.eds[k]})),
+  const range=issuesRange(), edList=type=>selEds(type).map(k=>({key:k,name:ED[k].name,count:edsOf(type)[k]}));
+  const body={url:st.url.trim(),text:st.paste.trim(),memo:st.memo.trim(),name:st.name,industry:st.ind,
+    goal:cnt("ad")?st.goal:"",job:cnt("job")?st.job.trim():"",eds:edList("ad"),jobEds:edList("job"),
     issues:range.map(o=>({m:o.m,label:issueLabel(o),closed:deadlines(o).finalDate<today})),
     season:seasonText(),chance:chanceText()};
   let pass=getPass();
