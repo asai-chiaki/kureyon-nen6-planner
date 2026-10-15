@@ -78,7 +78,7 @@ ul.plain{margin:0;padding-left:1.2em}
 
 /* ===== A4 sheet (document: fixed light print palette, independent of theme) ===== */
 .sheet{width:794px;height:1123px;background:#ffffff;color:#222b2d;font-family:"Zen Kaku Gothic New","Meiryo",sans-serif;
-  padding:40px 44px 34px;display:flex;flex-direction:column;gap:14px;overflow:hidden;position:relative;box-shadow:0 2px 14px rgba(0,0,0,.25)}
+  padding:36px 44px 30px;display:flex;flex-direction:column;gap:10px;overflow:hidden;position:relative;box-shadow:0 2px 14px rgba(0,0,0,.25)}
 .sheet .s-top{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #222b2d;padding-bottom:10px}
 .sheet .brand{font-family:"M PLUS Rounded 1c",sans-serif;font-weight:800;font-size:30px;letter-spacing:.32em;line-height:1}
 .sheet .brand small{display:block;font-size:10px;letter-spacing:.1em;font-weight:500;margin-bottom:6px;color:#5a6668}
@@ -145,6 +145,15 @@ ul.plain{margin:0;padding-left:1.2em}
       <label>お客様名<input type="text" id="f-name" placeholder="例: ○○フルーツ店"></label>
       <label>業種<select id="f-ind"></select></label>
 
+      <div id="shop-info" class="eds" hidden>
+        <h3>お店の情報（AIがプランを作るときに読みます）</h3>
+        <label>お店のサイトのURL<input type="text" id="f-url" placeholder="https://"></label>
+        <label>掲載の目的（任意）<input type="text" id="f-goal" placeholder="例: 求人と利用者募集／新メニューの告知"></label>
+        <label>担当者が知っていること（任意）<textarea id="f-memo" placeholder="主力商品・季節の商品・予約が必要な商品・忙しい月／暇な月・お客様の困りごと など"></textarea></label>
+        <details id="paste-box"><summary class="hint" style="cursor:pointer">サイトを読めなかったとき（紹介文を貼り付ける）</summary>
+          <textarea id="f-paste" placeholder="お店のサイトやInstagramの紹介文・メニューなどをコピーして貼り付け"></textarea></details>
+      </div>
+
       <h3>掲載の好機（任意）</h3>
       <label>オープン（創業）の年月<input type="month" id="f-anniv"></label>
       <div class="row2">
@@ -172,6 +181,7 @@ ul.plain{margin:0;padding-left:1.2em}
         <label>連絡先（任意）<input type="text" id="f-tel"></label>
       </div>
       <div id="cond-msg"></div>
+      <button type="button" class="primary" id="ai-run" hidden>サイトを読んでプランを作る（AI）</button>
       <button type="button" class="primary" id="run">業種のおすすめで組む</button>
       <div class="status" id="status" aria-live="polite"></div>
       <button type="button" id="reset">すべて消して最初から</button>
@@ -182,13 +192,6 @@ ul.plain{margin:0;padding-left:1.2em}
       <h2 id="an-h">2. プラン（書き直せます）</h2>
       <label>お客様へのキャッチ（A4に載ります）<input type="text" id="e-headline" placeholder="例: 季節の贈りものに合わせて、1年で6回思い出してもらうプラン"></label>
       <label>お店の魅力 3点（A4に載ります・1行1点）<textarea id="e-feat" style="min-height:76px" placeholder="1行に1つずつ、3行まで"></textarea></label>
-      <div id="miryoku" class="eds" hidden>
-        <label>お店のサイトのURL<input type="text" id="f-url" placeholder="https://"></label>
-        <details><summary class="hint" style="cursor:pointer">サイトを読めなかったとき（紹介文を貼り付ける）</summary>
-          <textarea id="f-paste" placeholder="お店のサイトやInstagramの紹介文・メニューなどをコピーして貼り付け"></textarea></details>
-        <button type="button" id="m-run">サイトから魅力を3点書く</button>
-        <div class="status" id="m-status" aria-live="polite"></div>
-      </div>
 
       <h3>掲載する号</h3>
       <div class="tbl"><table class="picks">
@@ -243,7 +246,7 @@ const yen = v => v==null?"—":v.toLocaleString("ja-JP");
 
 /* ---------- 状態（このブラウザに自動保存） ---------- */
 const STORE = "kureyon-nen6-planner-v1";
-function blank(){return {name:"",ind:INDUSTRIES[0],anniv:"",rivalM:"",rival:"",
+function blank(){return {name:"",ind:INDUSTRIES[0],url:"",goal:"",memo:"",paste:"",anniv:"",rivalM:"",rival:"",
   eds:{kiyosu:6},kind:"free",size:"1/4P",prod:true,start:earliestIssue(),staff:"",tel:"",
   headline:"",features:[],picks:[]};}
 let st = blank();
@@ -274,6 +277,7 @@ function buildInputs(){
     if(!SIZES[st.kind].includes(st.size))st.size="1/4P";syncInputs();renderAll();}));
   const bind=(id,key,ev="input")=>$(id).addEventListener(ev,e=>{st[key]=e.target.value;renderAll();});
   bind("f-name","name");bind("f-staff","staff");bind("f-tel","tel");
+  bind("f-url","url");bind("f-goal","goal");bind("f-memo","memo");bind("f-paste","paste");
   bind("f-ind","ind","change");bind("f-anniv","anniv");bind("f-rival-m","rivalM");bind("f-rival","rival");
   $("f-size").addEventListener("change",e=>{st.size=e.target.value;renderAll();});
   $("f-prod").addEventListener("change",e=>{st.prod=e.target.checked;renderAll();});
@@ -283,6 +287,7 @@ function buildInputs(){
 }
 function syncInputs(counts=true){
   $("f-name").value=st.name;$("f-staff").value=st.staff;$("f-tel").value=st.tel;
+  $("f-url").value=st.url;$("f-goal").value=st.goal;$("f-memo").value=st.memo;$("f-paste").value=st.paste;
   $("f-anniv").value=st.anniv;$("f-rival-m").value=st.rivalM;$("f-rival").value=st.rival;$("f-ind").value=st.ind;$("f-prod").checked=st.prod;
   ED_ORDER.forEach(k=>{const on=st.eds[k]>0;$("ck-"+k).checked=on;$("row-"+k).classList.toggle("on",on);
     if(counts)$("ct-"+k).value=on?st.eds[k]:"";$("ct-"+k).disabled=!on;});
@@ -322,18 +327,21 @@ function rivalInfo(){const r=parseYM(st.rivalM);if(!r)return null;const range=is
 
 /* ---------- 業種のおすすめで組む ---------- */
 // 点数: ◎ピーク5・○2・その他1、周年+3（節目+4）、同業店オープン前・当月+2。
-// 点数の高い号から、すでに選んだ号と離れている号を優先して選ぶ（間を空けすぎない）。
-function autoPlan(){
+// ai があれば、AIが付けた「このお店にとっての価値」（1〜5）×3 と、AIのおすすめ（best）+4 を足し、理由とテーマもAIの文を使う。
+// 点数の合計が高く、掲載の間が空きすぎない組み合わせを選ぶ。
+function autoPlan(ai){
   const n=total(); if(!n)return null;
   const ind=INDUSTRY[st.ind]||{peak:[],good:[]}, a=annivInfo(), r=rivalInfo();
-  const cands=issuesRange().filter(o=>deadlines(o).finalDate>=today).map(o=>{
-    const k=issueKey(o); let score=1, why=[];
+  const range=issuesRange();
+  const cands=range.filter(o=>deadlines(o).finalDate>=today).map(o=>{
+    const k=issueKey(o), idx=range.indexOf(o), am=ai&&ai.byI.get(idx); let score=1, why=[];
     if(ind.peak.includes(o.m)){score=5;why.push("一年でいちばん需要が高まる時期");}
     else if(ind.good.includes(o.m)){score=2;why.push("需要が伸びる時期");}
     if(a&&issueKey(a.o)===k){score+=a.milestone?4:3;why.unshift(`${a.years}周年の号`);}
     if(r&&(issueKey(r.prev)===k||issueKey(r.o)===k)){score+=2;why.push("このエリアで先に知ってもらう");}
     if(ind.peak.includes(o.m+1)||(o.m===12&&ind.peak.includes(1)))why.push("翌月の山に向けた予約・予告");
-    return {...o,k,score,why};});
+    if(ai)score+=(am?am.score*3:0)+(ai.best.has(idx)?4:0);
+    return {...o,k,score,why,am};});
   // 候補は最大12号なので、すべての組み合わせを試して一番よいものを選ぶ
   const want=Math.min(n,cands.length);let chosen=[],bv=-Infinity;
   for(let mask=0;mask<(1<<cands.length);mask++){
@@ -348,9 +356,9 @@ function autoPlan(){
   const slots=[];selEds().sort((x,y)=>st.eds[y]-st.eds[x]).forEach(k=>{for(let i=0;i<st.eds[k];i++)slots.push(k);});
   const byScore=chosen.slice().sort((x,y)=>y.score-x.score||x.k-y.k);
   byScore.forEach((c,i)=>c.ed=slots[i]||mainEd());
-  return chosen.sort((x,y)=>x.k-y.k).map(c=>({y:c.y,m:c.m,ed:c.ed,
+  return chosen.sort((x,y)=>x.k-y.k).map(c=>c.am&&c.am.reason?{y:c.y,m:c.m,ed:c.ed,reason:c.am.reason,angle:c.am.angle}:{y:c.y,m:c.m,ed:c.ed,
     reason:`${MONTH_THEME[c.m]}の時期。`+(c.why.length?c.why.join("、")+"。":"前後の号との間をつなぐ。"),
-    angle:""}));
+    angle:"",rule:true});
 }
 function runAuto(){
   if(!total()){$("status").textContent="掲載版を選んでください。";return;}
@@ -407,6 +415,9 @@ function renderPickMsg(){
   if(st.picks.length!==total())msgs.unshift(`表の行数（${st.picks.length}）と合計回数（${total()}）が違います。`);
   const ks=st.picks.map(issueKey).sort((a,b)=>a-b);let gap=0;for(let i=1;i<ks.length;i++)gap=Math.max(gap,ks[i]-ks[i-1]);
   if(gap>=4)msgs.push(`掲載の間が${gap}か月空くところがあります（3か月以内が目安）。`);
+  const ind=INDUSTRY[st.ind]||{peak:[]},months=new Set(st.picks.map(p=>p.m));
+  const miss=ind.peak.filter(m=>!months.has(m)&&issuesRange().some(o=>o.m===m&&deadlines(o).finalDate>=today));
+  if(miss.length)msgs.push(`この業種のいちばんの山（${miss.map(m=>m+"月号").join("・")}）が入っていません。`);
   $("pick-msg").innerHTML=msgs.length?`<div class="msg warn">${msgs.map(esc).join("<br>")}</div>`:"";
 }
 function renderPrice(){
@@ -476,30 +487,58 @@ function renderAll(){renderChance();renderCounts();renderPicks();renderPrice();r
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 window.addEventListener("resize",fitScale);
 
-/* ---------- サイトから魅力を書く（中継サーバー経由でAIが要約） ---------- */
+/* ---------- サイトを読んでプランを作る（中継サーバー経由でAI） ---------- */
 const PASS_KEY = "kureyon-nen6-passcode";
 function getPass(){try{return localStorage.getItem(PASS_KEY)||"";}catch(e){return "";}}
 function setPass(v){try{v?localStorage.setItem(PASS_KEY,v):localStorage.removeItem(PASS_KEY);}catch(e){}}
-async function runMiryoku(){
-  const ms=$("m-status"), url=$("f-url").value.trim(), text=$("f-paste").value.trim();
-  if(!url&&!text){ms.textContent="お店のサイトのURLを入れてください。";return;}
-  if(st.features.length&&!confirm("今の「お店の魅力」を、サイトから書いた内容で置き換えます。よろしいですか？"))return;
+// AIの採点（号ごとの価値・理由・テーマ）をもとに、締切・掲載の間・ピーク号・版の回数のルールで号を決める
+function planFromAI(d){
+  const byI=new Map((d.months||[]).map(m=>[m.i,m]));
+  const picks=autoPlan({byI,best:new Set(d.best||[])})||[];
+  const filled=picks.filter(p=>p.rule).length;
+  picks.forEach(p=>delete p.rule);
+  return {picks,notes:filled?[`${filled}回分はAIの文がなかったので、理由を決まった文で入れました。テーマを書き足してください`]:[]};
+}
+function seasonText(){
+  const ind=INDUSTRY[st.ind]||{peak:[],good:[]};
+  return "【月ごとの出来事（尾張）】"+Object.entries(MONTH_THEME).map(([m,t])=>`${m}月号:${t}`).join("／")+
+    `\n【この業種のピーク号】${ind.peak.length?"◎"+ind.peak.join(","):"なし"}${ind.good.length?" ○"+ind.good.join(","):""}`;
+}
+function chanceText(){
+  const a=annivInfo(),r=rivalInfo(),L=[];
+  if(a)L.push(`- 周年: ${issueLabel(a.o)}が${a.years}周年${a.milestone?"（節目。この号は必ず入れ、可能なら前の号で予告）":"（候補として優先）"}。reason・angleで周年に触れる。`);
+  if(r&&(r.prevIn||r.inRange))L.push(`- 近くの同業店のオープン予定: ${r.o.y}年${r.o.m}月。オープン前の${issueLabel(r.prev)}とオープン月の号を優先し、お客様が先に選ばれる理由を前向きに伝える。`);
+  return L.join("\n");
+}
+async function runAI(){
+  const ms=$("status");
+  if(!st.name.trim()){ms.textContent="お客様名を入れてください。";return;}
+  if(!total()){ms.textContent="掲載版を選んでください。";return;}
+  if(!st.url.trim()&&!st.paste.trim()&&st.memo.trim().length<30){ms.textContent="お店のサイトのURLを入れるか、担当者が知っていることを書いてください。";return;}
+  if((st.picks.length||st.features.length)&&!confirm("今のプラン（キャッチ・魅力・掲載号の表）を、AIの案で置き換えます。よろしいですか？"))return;
+  const range=issuesRange();
+  const body={url:st.url.trim(),text:st.paste.trim(),memo:st.memo.trim(),name:st.name,industry:st.ind,goal:st.goal,
+    eds:selEds().map(k=>({key:k,name:ED[k].name,count:st.eds[k]})),
+    issues:range.map((o,i)=>({i,label:issueLabel(o),closed:deadlines(o).finalDate<today})),
+    season:seasonText(),chance:chanceText()};
   let pass=getPass();
   for(let tries=0;tries<3;tries++){
-    $("m-run").disabled=true;ms.textContent="サイトを読んでいます…（10〜30秒）";
+    $("ai-run").disabled=true;ms.textContent="お店のサイトを読んでプランを作っています…（10〜30秒）";
     try{
-      const r=await fetch(MIRYOKU_API,{method:"POST",headers:{"Content-Type":"application/json","X-Passcode":pass},
-        body:JSON.stringify({url,text,name:st.name,industry:st.ind})});
+      const r=await fetch(MIRYOKU_API,{method:"POST",headers:{"Content-Type":"application/json","X-Passcode":pass},body:JSON.stringify(body)});
       const d=await r.json().catch(()=>({}));
       if(r.status===401&&d.code==="passcode"){
         setPass("");if(tries===2)break;pass=prompt(tries?"合言葉が違います。もう一度入れてください。":"合言葉を入れてください（管理者から聞いたもの）")||"";
         if(!pass){ms.textContent="合言葉が入っていません。";return;}
         setPass(pass);continue;}
-      if(!r.ok){ms.textContent=d.error||"うまくいきませんでした。";if(d.code==="empty")$("f-paste").closest("details").open=true;return;}
-      st.features=d.features||[];$("e-feat").value=st.features.join("\n");renderSheet();save();
-      ms.textContent="書きました。お店に合わせて直してください。";return;
+      if(!r.ok){ms.textContent=d.error||"うまくいきませんでした。";if(d.code==="empty")$("paste-box").open=true;return;}
+      const f=planFromAI(d);
+      st.headline=d.headline||st.headline;if((d.features||[]).length)st.features=d.features;st.picks=f.picks;
+      syncInputs(false);renderAll();
+      ms.textContent=(d.source==="memo"?"メモをもとに":"お店のサイトをもとに")+"プランを作りました。表や文章はそのまま直せます。"+(f.notes.length?"（"+f.notes.join("。")+"）":"");
+      return;
     }catch(e){ms.textContent="つながりませんでした。少し待ってからもう一度押してください。";return;}
-    finally{$("m-run").disabled=false;}
+    finally{$("ai-run").disabled=false;}
   }
   ms.textContent="合言葉を確認して、もう一度押してください。";
 }
@@ -527,7 +566,7 @@ async function makePDF(){
 buildInputs();syncInputs();renderAll();
 $("run").addEventListener("click",runAuto);
 $("pdf").addEventListener("click",makePDF);
-if(MIRYOKU_API){$("miryoku").hidden=false;$("m-run").addEventListener("click",runMiryoku);}
+if(MIRYOKU_API){$("shop-info").hidden=false;$("ai-run").hidden=false;$("run").classList.remove("primary");$("ai-run").addEventListener("click",runAI);}
 $("reset").addEventListener("click",()=>{if(!confirm("入力をすべて消して最初からにします。よろしいですか？"))return;
   st=blank();try{localStorage.removeItem(STORE);}catch(e){}syncInputs();renderAll();$("status").textContent="";});
 </script>

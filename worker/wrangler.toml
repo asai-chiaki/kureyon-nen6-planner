@@ -8,7 +8,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 # このページからの呼び出しだけ受け付ける（カンマ区切り）
-ALLOWED_ORIGINS = "https://asai-chiaki.github.io,http://localhost:8765"
+ALLOWED_ORIGINS = "https://asai-chiaki.github.io"
 
 # Workers AI（無料枠: 1日10,000ニューロン。カード登録なしで使える）
 [ai]
