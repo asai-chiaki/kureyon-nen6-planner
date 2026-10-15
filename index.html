@@ -352,7 +352,7 @@ function autoPlan(ai){
     // 業種のピーク号は必ず入れる
     v-=1000*peakMust.filter(m=>!pick.some(c=>c.m===m)).length;
     // 年をまたいで同じ組み方を続けるので、最後の号から翌年の最初の号までの間も数える
-    for(let i=0;i<pick.length;i++){const g=i?pick[i].k-pick[i-1].k:pick[0].k+12-pick[pick.length-1].k;if(g>3)v-=100*(g-3);v-=g*g;}
+    for(let i=0;i<pick.length;i++){const g=i?pick[i].k-pick[i-1].k:pick[0].k+12-pick[pick.length-1].k;if(g>3)v-=1000*(g-3);v-=g*g;}
     if(v>bv){bv=v;chosen=pick;}
   }
   // 点数の高い号から、回数の多い版（メイン版）を割り当てる
