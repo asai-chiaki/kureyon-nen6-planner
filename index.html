@@ -182,6 +182,13 @@ ul.plain{margin:0;padding-left:1.2em}
       <h2 id="an-h">2. プラン（書き直せます）</h2>
       <label>お客様へのキャッチ（A4に載ります）<input type="text" id="e-headline" placeholder="例: 季節の贈りものに合わせて、1年で6回思い出してもらうプラン"></label>
       <label>お店の魅力 3点（A4に載ります・1行1点）<textarea id="e-feat" style="min-height:76px" placeholder="1行に1つずつ、3行まで"></textarea></label>
+      <div id="miryoku" class="eds" hidden>
+        <label>お店のサイトのURL<input type="text" id="f-url" placeholder="https://"></label>
+        <details><summary class="hint" style="cursor:pointer">サイトを読めなかったとき（紹介文を貼り付ける）</summary>
+          <textarea id="f-paste" placeholder="お店のサイトやInstagramの紹介文・メニューなどをコピーして貼り付け"></textarea></details>
+        <button type="button" id="m-run">サイトから魅力を3点書く</button>
+        <div class="status" id="m-status" aria-live="polite"></div>
+      </div>
 
       <h3>掲載する号</h3>
       <div class="tbl"><table class="picks">
@@ -469,6 +476,34 @@ function renderAll(){renderChance();renderCounts();renderPicks();renderPrice();r
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 window.addEventListener("resize",fitScale);
 
+/* ---------- サイトから魅力を書く（中継サーバー経由でAIが要約） ---------- */
+const PASS_KEY = "kureyon-nen6-passcode";
+function getPass(){try{return localStorage.getItem(PASS_KEY)||"";}catch(e){return "";}}
+function setPass(v){try{v?localStorage.setItem(PASS_KEY,v):localStorage.removeItem(PASS_KEY);}catch(e){}}
+async function runMiryoku(){
+  const ms=$("m-status"), url=$("f-url").value.trim(), text=$("f-paste").value.trim();
+  if(!url&&!text){ms.textContent="お店のサイトのURLを入れてください。";return;}
+  if(st.features.length&&!confirm("今の「お店の魅力」を、サイトから書いた内容で置き換えます。よろしいですか？"))return;
+  let pass=getPass();
+  for(let tries=0;tries<3;tries++){
+    $("m-run").disabled=true;ms.textContent="サイトを読んでいます…（10〜30秒）";
+    try{
+      const r=await fetch(MIRYOKU_API,{method:"POST",headers:{"Content-Type":"application/json","X-Passcode":pass},
+        body:JSON.stringify({url,text,name:st.name,industry:st.ind})});
+      const d=await r.json().catch(()=>({}));
+      if(r.status===401&&d.code==="passcode"){
+        setPass("");if(tries===2)break;pass=prompt(tries?"合言葉が違います。もう一度入れてください。":"合言葉を入れてください（管理者から聞いたもの）")||"";
+        if(!pass){ms.textContent="合言葉が入っていません。";return;}
+        setPass(pass);continue;}
+      if(!r.ok){ms.textContent=d.error||"うまくいきませんでした。";if(d.code==="empty")$("f-paste").closest("details").open=true;return;}
+      st.features=d.features||[];$("e-feat").value=st.features.join("\n");renderSheet();save();
+      ms.textContent="書きました。お店に合わせて直してください。";return;
+    }catch(e){ms.textContent="つながりませんでした。少し待ってからもう一度押してください。";return;}
+    finally{$("m-run").disabled=false;}
+  }
+  ms.textContent="合言葉を確認して、もう一度押してください。";
+}
+
 /* ---------- PDF ---------- */
 async function makePDF(){
   const ps=$("pdf-status");
@@ -492,6 +527,7 @@ async function makePDF(){
 buildInputs();syncInputs();renderAll();
 $("run").addEventListener("click",runAuto);
 $("pdf").addEventListener("click",makePDF);
+if(MIRYOKU_API){$("miryoku").hidden=false;$("m-run").addEventListener("click",runMiryoku);}
 $("reset").addEventListener("click",()=>{if(!confirm("入力をすべて消して最初からにします。よろしいですか？"))return;
   st=blank();try{localStorage.removeItem(STORE);}catch(e){}syncInputs();renderAll();$("status").textContent="";});
 </script>

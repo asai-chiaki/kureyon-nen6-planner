@@ -1,0 +1,12 @@
+# お店のサイトを読んで「お店の魅力3点」を返す中継サーバー（Cloudflare Workers）
+# APIキーと合言葉は Cloudflare の画面の「設定 → 変数とシークレット」で登録する（このファイルには書かない）
+#   ANTHROPIC_API_KEY … Anthropic の APIキー
+#   PASSCODE          … メンバーに伝える合言葉（未登録なら合言葉なしで動く）
+name = "kureyon-nen6-miryoku"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# このページからの呼び出しだけ受け付ける（カンマ区切り）
+ALLOWED_ORIGINS = "https://asai-chiaki.github.io,http://localhost:8765"
