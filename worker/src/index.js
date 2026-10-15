@@ -41,13 +41,17 @@ export default {
       const url = parseUrl(b.url);
       if (!url) return json({ error: "お店のサイトのURL（https://〜）を確認してください。" }, 400, cors);
       try { text = await readSite(url); source = "site"; }
-      catch (e) { return json({ error: e.userMessage || "サイトを開けませんでした。", code: "fetch" }, 422, cors); }
+      catch (e) {
+        // サイトを読めなくても、メモが書いてあればメモだけで作る
+        if (memo.length < 30) return json({ error: e.userMessage || "サイトを開けませんでした。", code: e.code || "fetch" }, 422, cors);
+        text = ""; source = "memo-nosite";
+      }
       if (text.length < MIN_TEXT_CHARS && memo.length < 30)
         return json({ error: "このサイトは文章を読み取れませんでした（画像や動きのある作りのサイトです）。下の欄にサイトの紹介文を貼り付けてください。", code: "empty" }, 422, cors);
     }
     if (text.length < MIN_TEXT_CHARS && memo.length < 30)
       return json({ error: "お店のサイトのURLを入れるか、紹介文・メモを書いてください。", code: "empty" }, 400, cors);
-    if (text.length < MIN_TEXT_CHARS) source = "memo";
+    if (text.length < MIN_TEXT_CHARS && source !== "memo-nosite") source = "memo";
 
     const prompt = `次のお客様に、合計${total}回の掲載プランを作ってください。
 
@@ -126,14 +130,28 @@ function parseOutput(res) {
   return out && typeof out === "object" ? out : null;
 }
 
+// ふつうのブラウザに近い見え方で取りに行く（自動アクセスを断るサイトが多いため）
+const BROWSER_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "ja,en-US;q=0.7,en;q=0.3",
+};
+// 自動で読まれるのを断っている（または一時的に混んでいる）ときの返事
+const REFUSED = new Set([401, 403, 406, 429, 451, 503]);
+
 async function readSite(url) {
   let res;
-  try {
-    res = await fetch(url, { redirect: "follow", headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; KureyonPlanner/1.0)", "Accept-Language": "ja,en;q=0.5" },
-      signal: AbortSignal.timeout(15_000) });
-  } catch { throw Object.assign(new Error(), { userMessage: "サイトを開けませんでした。URLを確認してください。" }); }
-  if (!res.ok) throw Object.assign(new Error(), { userMessage: `サイトを開けませんでした（${res.status}）。URLを確認してください。` });
+  for (let tries = 0; tries < 2; tries++) {
+    try {
+      res = await fetch(url, { redirect: "follow", headers: BROWSER_HEADERS, signal: AbortSignal.timeout(15_000) });
+    } catch { throw Object.assign(new Error(), { userMessage: "サイトを開けませんでした。URLを確認してください。" }); }
+    if (res.status !== 429 && res.status !== 503) break;
+    await new Promise(r => setTimeout(r, 1500)); // 混んでいるだけなら少し待ってもう一度
+  }
+  if (REFUSED.has(res.status)) throw Object.assign(new Error(), { code: "empty",
+    userMessage: "このサイトは自動で読み取れないようになっています。下の欄にサイトの紹介文を貼り付けるか、「担当者が知っていること」に書いてください。" });
+  if (res.status === 404) throw Object.assign(new Error(), { userMessage: "そのページは見つかりませんでした（404）。URLを確認してください。" });
+  if (!res.ok) throw Object.assign(new Error(), { userMessage: `サイトを開けませんでした（${res.status}）。少し待ってから試すか、紹介文を貼り付けてください。` });
   if (!/html|text/i.test(res.headers.get("content-type") || "")) throw Object.assign(new Error(), { userMessage: "Webページ以外のURLです。" });
 
   // 先頭 MAX_HTML_BYTES だけ読む

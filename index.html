@@ -538,7 +538,7 @@ async function runAI(){
       const f=planFromAI(d);
       st.headline=d.headline||st.headline;if((d.features||[]).length)st.features=d.features;st.picks=f.picks;
       syncInputs(false);renderAll();
-      ms.textContent=(d.source==="memo"?"メモをもとに":"お店のサイトをもとに")+"プランを作りました。表や文章はそのまま直せます。"+(f.notes.length?"（"+f.notes.join("。")+"）":"");
+      ms.textContent=(d.source==="memo-nosite"?"お店のサイトは自動で読めなかったので、メモだけをもとに":d.source==="memo"?"メモをもとに":"お店のサイトをもとに")+"プランを作りました。表や文章はそのまま直せます。"+(f.notes.length?"（"+f.notes.join("。")+"）":"");
       return;
     }catch(e){ms.textContent="つながりませんでした。少し待ってからもう一度押してください。";return;}
     finally{$("ai-run").disabled=false;}
