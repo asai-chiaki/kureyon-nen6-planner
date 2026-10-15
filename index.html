@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>くれよん年6回プランナー</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+/* Layout: 左に入力・右に社内分析の2カラム（狭い画面は1カラム）、下にお客様用A4プレビュー */
+:root{
+  --bg:#f6f8f8; --panel:#ffffff; --fg:#1d2a2c; --muted:#5d6d70; --line:#d9e2e3;
+  --accent:#0a8fae; --accent-soft:#e2f3f7; --warn:#b25a12; --warn-soft:#fdf1e4; --bad:#b3263a; --ok:#227a4a;
+  --display:"M PLUS Rounded 1c","Hiragino Maru Gothic ProN","Meiryo",sans-serif;
+  --body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121a1c; --panel:#1a2427; --fg:#e4ecec; --muted:#9db0b2; --line:#2e3d40;
+  --accent:#4cc3df; --accent-soft:#163942; --warn:#f0a660; --warn-soft:#3a2a17; --bad:#ff7d8f; --ok:#6fd39b; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121a1c; --panel:#1a2427; --fg:#e4ecec; --muted:#9db0b2; --line:#2e3d40;
+  --accent:#4cc3df; --accent-soft:#163942; --warn:#f0a660; --warn-soft:#3a2a17; --bad:#ff7d8f; --ok:#6fd39b; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:14px;line-height:1.65}
+.wrap{max-width:1240px;margin:0 auto;padding-inline:16px;padding-block:20px 60px;display:grid;gap:20px}
+header.top h1{font-family:var(--display);font-weight:800;font-size:24px;margin:0;letter-spacing:.02em;text-wrap:balance}
+header.top p{margin:4px 0 0;color:var(--muted)}
+.cols{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:900px){.cols{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:14px;min-width:0}
+.panel h2{font-family:var(--display);font-size:16px;margin:0;font-weight:700}
+.panel h3{font-size:13px;margin:0;color:var(--muted);letter-spacing:.05em}
+label{display:grid;gap:4px;font-size:13px;font-weight:500}
+input[type=text],select,textarea,input[type=number]{width:100%;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px}
+textarea{resize:vertical;min-height:84px}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.hint{font-size:12px;color:var(--muted);margin:0}
+.eds{display:grid;gap:6px}
+.ed-row{display:grid;grid-template-columns:auto 1fr 74px;gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:6px}
+.ed-row.on{border-color:var(--accent);background:var(--accent-soft)}
+.ed-row .dot{width:10px;height:10px;border-radius:50%}
+.ed-row label{display:flex;align-items:center;gap:6px;font-weight:500}
+.ed-row input[type=number]{padding:4px 6px;text-align:right}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1;min-width:0}
+button{font:inherit;cursor:pointer;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:8px 12px}
+button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700;font-size:15px;padding:11px}
+button:disabled{opacity:.55;cursor:default}
+.msg{padding:8px 10px;border-radius:6px;font-size:13px}
+.msg.warn{background:var(--warn-soft);color:var(--warn)}
+.msg.bad{background:var(--warn-soft);color:var(--bad)}
+.msg.info{background:var(--accent-soft);color:var(--fg)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:6px 6px;text-align:left;vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:500;white-space:nowrap}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.picks td textarea{min-height:52px;font-size:12.5px;padding:5px 6px}
+.picks td select{font-size:12.5px;padding:5px 4px}
+.lvl{display:inline-block;width:1.6em;text-align:center;font-weight:700}
+.cal{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.cal div{border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12.5px}
+.cal b{font-family:var(--display)}
+.pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent);font-weight:700}
+.pill.ex{background:var(--warn-soft);color:var(--warn)}
+.internal{border-left:4px solid var(--warn)}
+.status{font-size:13px;color:var(--muted);min-height:1.2em}
+ul.plain{margin:0;padding-left:1.2em}
+.sheet-zone{display:grid;gap:12px}
+.sheet-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.sheet-frame{background:#8f9a9c;border-radius:10px;padding:16px;overflow:hidden}
+.sheet-scale{transform-origin:top left}
+
+/* ===== A4 sheet (document: fixed light print palette, independent of theme) ===== */
+.sheet{width:794px;height:1123px;background:#ffffff;color:#222b2d;font-family:"Zen Kaku Gothic New","Meiryo",sans-serif;
+  padding:40px 44px 34px;display:flex;flex-direction:column;gap:14px;overflow:hidden;position:relative;box-shadow:0 2px 14px rgba(0,0,0,.25)}
+.sheet .s-top{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #222b2d;padding-bottom:10px}
+.sheet .brand{font-family:"M PLUS Rounded 1c",sans-serif;font-weight:800;font-size:30px;letter-spacing:.32em;line-height:1}
+.sheet .brand small{display:block;font-size:10px;letter-spacing:.1em;font-weight:500;margin-bottom:6px;color:#5a6668}
+.sheet .meta{text-align:right;font-size:11px;color:#4a5658;line-height:1.5}
+.sheet .s-title{font-family:"M PLUS Rounded 1c",sans-serif;font-weight:800;font-size:23px;line-height:1.35;margin:0}
+.sheet .s-title span{display:block;font-size:14px;font-weight:700;color:#0a7f9b;margin-bottom:2px}
+.sheet .catch{font-size:14px;font-weight:700;background:#fff6d6;border-radius:6px;padding:8px 12px;margin:0}
+.sheet .sec h4{font-family:"M PLUS Rounded 1c",sans-serif;font-size:13.5px;margin:0 0 6px;display:flex;align-items:center;gap:8px}
+.sheet .sec h4::before{content:"";width:14px;height:5px;border-radius:3px;background:#0a8fae}
+.sheet .feat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.sheet .feat div{font-size:11.5px;line-height:1.55;border:1px solid #dfe5e6;border-radius:6px;padding:7px 9px}
+.sheet .tl{display:grid;grid-template-columns:repeat(12,1fr);gap:3px}
+.sheet .tl div{border-radius:5px;background:#f0f3f3;text-align:center;padding:5px 0 4px;font-size:10.5px;color:#7c8889;min-height:46px}
+.sheet .tl div b{display:block;font-size:13px;color:#9aa5a6;font-family:"M PLUS Rounded 1c",sans-serif}
+.sheet .tl div.hit{color:#fff}
+.sheet .tl div.hit b{color:#fff}
+.sheet .tl .y{font-size:9px}
+.sheet table{font-size:11px;border-collapse:collapse;width:100%}
+.sheet th{background:#eef3f4;color:#3c4a4c;font-size:10.5px;padding:5px 6px;border-bottom:1px solid #cfd8d9;text-align:left;white-space:nowrap}
+.sheet td{padding:5px 6px;border-bottom:1px solid #e3e9ea;vertical-align:top;line-height:1.5}
+.sheet td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sheet .edtag{display:inline-block;color:#fff;font-size:10px;font-weight:700;border-radius:3px;padding:1px 5px;white-space:nowrap}
+.sheet .price{display:grid;grid-template-columns:1.25fr 1fr;gap:12px;align-items:stretch}
+.sheet .save{background:#0a8fae;color:#fff;border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.sheet .save .big{font-family:"M PLUS Rounded 1c",sans-serif;font-size:26px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.sheet .save small{font-size:10.5px;opacity:.95}
+.sheet .why{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.sheet .why div{font-size:10.5px;line-height:1.5;background:#f5f8f8;border-radius:6px;padding:7px 9px}
+.sheet .why b{display:block;font-family:"M PLUS Rounded 1c",sans-serif;font-size:17px;color:#0a7f9b}
+.sheet .foot{margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;font-size:10px;color:#5a6668;border-top:1px solid #cfd8d9;padding-top:8px;gap:12px}
+.sheet .foot b{color:#222b2d;font-size:12px}
+.sheet .note{font-size:9.5px;color:#6b7678;margin:2px 0 0}
+#capture{position:fixed;left:-12000px;top:0}
+.steps{margin:10px 0 0;padding:10px 14px 10px 32px;background:var(--accent-soft);border-radius:8px;display:grid;gap:4px;font-size:13px}
+.drop{border:2px dashed var(--line);border-radius:8px;padding:12px;text-align:center;font-size:13px;color:var(--muted);cursor:pointer;background:var(--bg)}
+.drop b{color:var(--fg)}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop.off{opacity:.6;cursor:default}
+.thumbs{display:flex;flex-wrap:wrap;gap:8px}
+.thumbs:empty{display:none}
+.thumbs figure{margin:0;position:relative;width:72px;height:72px;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.thumbs img{width:100%;height:100%;object-fit:cover}
+.thumbs button{position:absolute;top:2px;right:2px;padding:0 6px;font-size:12px;line-height:18px;border-radius:9px;background:rgba(0,0,0,.6);color:#fff;border:0}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>くれよん 年6回プランナー</h1>
+    <p>お客様の商売の波に合わせて「どの号に・どの版に・なぜ載せるか」を組み立て、A4一枚の提案書にします。料金は<span id="src-label"></span>で自動計算します。</p>
+    <ol class="steps">
+      <li><b>条件を入れる</b>：お客様名・業種・掲載版と回数・広告の種類とサイズ・開始の号を選ぶ</li>
+      <li><b>「業種のおすすめで組む」を押す</b>：6回の号・版・理由のたたき台が入ります。表はそのまま書き直せます</li>
+      <li><b>「PDFをダウンロード」</b>：お客様に渡すA4一枚ができます</li>
+    </ol>
+    <p class="hint">入力内容はこのパソコンのブラウザにだけ保存されます（ほかの人には見えません）。</p>
+  </header>
+
+  <div class="cols">
+    <!-- 入力 -->
+    <section class="panel" aria-labelledby="in-h">
+      <h2 id="in-h">1. お客様と掲載条件</h2>
+      <label>お客様名<input type="text" id="f-name" placeholder="例: ○○フルーツ店"></label>
+      <label>業種<select id="f-ind"></select></label>
+
+      <h3>掲載の好機（任意）</h3>
+      <label>オープン（創業）の年月<input type="month" id="f-anniv"></label>
+      <div class="row2">
+        <label>近くの同業店のオープン予定月<input type="month" id="f-rival-m"></label>
+        <label>どんなお店か<input type="text" id="f-rival" placeholder="例: 駅前にカフェ"></label>
+      </div>
+      <p class="hint">同業店の情報は号の選び方にだけ使い、お客様用のA4には出しません。</p>
+      <div id="chance" class="msg info" hidden></div>
+
+      <h3>掲載版と回数（複数選べます）</h3>
+      <div class="eds" id="eds"></div>
+      <div id="count-msg" class="msg info"></div>
+
+      <h3>広告の種類とサイズ</h3>
+      <div class="seg" id="kind">
+        <button type="button" data-k="free">フリー広告</button>
+        <button type="button" data-k="fixed">定型広告</button>
+      </div>
+      <label>サイズ<select id="f-size"></select></label>
+      <label style="display:flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" id="f-prod" checked> 制作費を毎回計上する（フリー広告）</label>
+
+      <label>掲載開始の号<select id="f-start"></select></label>
+      <div class="row2">
+        <label>担当者名<input type="text" id="f-staff"></label>
+        <label>連絡先（任意）<input type="text" id="f-tel"></label>
+      </div>
+      <div id="cond-msg"></div>
+      <button type="button" class="primary" id="run">業種のおすすめで組む</button>
+      <div class="status" id="status" aria-live="polite"></div>
+      <button type="button" id="reset">すべて消して最初から</button>
+    </section>
+
+    <!-- プラン -->
+    <section class="panel" aria-labelledby="an-h">
+      <h2 id="an-h">2. プラン（書き直せます）</h2>
+      <label>お客様へのキャッチ（A4に載ります）<input type="text" id="e-headline" placeholder="例: 季節の贈りものに合わせて、1年で6回思い出してもらうプラン"></label>
+      <label>お店の魅力 3点（A4に載ります・1行1点）<textarea id="e-feat" style="min-height:76px" placeholder="1行に1つずつ、3行まで"></textarea></label>
+
+      <h3>掲載する号</h3>
+      <div class="tbl"><table class="picks">
+        <thead><tr><th>#</th><th>号</th><th>版</th><th>申込（理想／最終）</th><th>載せる理由</th><th>原稿のテーマ</th></tr></thead>
+        <tbody id="picks"></tbody>
+      </table></div>
+      <div id="pick-msg"></div>
+
+      <h3>料金（税別）</h3>
+      <div class="tbl"><table><thead><tr><th>内訳</th><th class="num">1回単価</th><th class="num">回数</th><th class="num">金額</th></tr></thead><tbody id="price"></tbody></table></div>
+      <p class="hint" id="price-note"></p>
+    </section>
+  </div>
+
+  <!-- A4 -->
+  <section class="sheet-zone" aria-labelledby="sh-h">
+    <div class="sheet-head">
+      <div>
+        <h2 id="sh-h" style="font-family:var(--display);font-size:18px;margin:0">3. お客様に提出する資料（A4・1枚）</h2>
+      </div>
+      <div style="display:grid;gap:4px;justify-items:end">
+        <button type="button" class="primary" id="pdf" style="padding:10px 18px">PDFをダウンロード</button>
+        <span class="status" id="pdf-status" aria-live="polite"></span>
+      </div>
+    </div>
+    <div id="fit-msg"></div>
+    <div class="sheet-frame" id="frame"><div class="sheet-scale" id="scaler"><div class="sheet" id="sheet"></div></div></div>
+  </section>
+</div>
+<div id="capture" aria-hidden="true"></div>
+
+<script src="data.js"></script>
+<script>
+const ED_ORDER = Object.keys(ED);
+const INDUSTRIES = Object.keys(INDUSTRY);
+
+/* ---------- 号と日付 ---------- */
+const today = new Date();
+function lastDay(y,m){return new Date(y,m,0).getDate();} // m:1-12
+function addM(y,m,k){const t=(y*12+(m-1))+k;return {y:Math.floor(t/12),m:t%12+1};}
+function earliestIssue(){const d=today.getDate();const k=d<=10?1:2;return addM(today.getFullYear(),today.getMonth()+1,k);}
+function issueKey(o){return o.y*12+(o.m-1);}
+function distText(ed,iss){const p=addM(iss.y,iss.m,-1);const t=ED[ed].dist;
+  if(t==="end")return `${p.m}/${lastDay(p.y,p.m)}〜`; return `${p.m}/${t}頃〜`;}
+function deadlines(iss){const p=addM(iss.y,iss.m,-1),pp=addM(iss.y,iss.m,-2);
+  return {ideal:`${pp.m}/${lastDay(pp.y,pp.m)}`,final:`${p.m}/10`,
+    finalDate:new Date(p.y,p.m-1,10,23,59),idealDate:new Date(pp.y,pp.m-1,lastDay(pp.y,pp.m),23,59)};}
+function issueLabel(o,withYear=true){return (withYear?`${o.y}年`:"")+`${o.m}月号`;}
+function tierIdx(n){if(n>=12)return 7;if(n>=9)return 6;if(n>=6)return 5;return Math.max(0,n-1);}
+function tierName(n){return ["年1回","年2回","年3回","年4回","年5回","年6〜8回","年9〜11回","年12回"][tierIdx(n)];}
+const yen = v => v==null?"—":v.toLocaleString("ja-JP");
+
+/* ---------- 状態（このブラウザに自動保存） ---------- */
+const STORE = "kureyon-nen6-planner-v1";
+function blank(){return {name:"",ind:INDUSTRIES[0],anniv:"",rivalM:"",rival:"",
+  eds:{kiyosu:6},kind:"free",size:"1/4P",prod:true,start:earliestIssue(),staff:"",tel:"",
+  headline:"",features:[],picks:[]};}
+let st = blank();
+try{const s=JSON.parse(localStorage.getItem(STORE)||"null");if(s&&s.start)st=Object.assign(blank(),s);}catch(e){}
+if(issueKey(st.start)<issueKey(earliestIssue()))st.start=earliestIssue();
+let saveT=null;
+function save(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem(STORE,JSON.stringify(st));}catch(e){}},300);}
+
+/* ---------- 入力UI ---------- */
+const $ = id => document.getElementById(id);
+function total(){return Object.values(st.eds).reduce((a,b)=>a+(b||0),0);}
+function selEds(){return ED_ORDER.filter(k=>st.eds[k]>0);}
+function mainEd(){const s=selEds();return s.sort((a,b)=>(st.eds[b]-st.eds[a])||(ED_ORDER.indexOf(a)-ED_ORDER.indexOf(b)))[0];}
+
+function buildInputs(){
+  $("src-label").textContent=PRICE_SOURCE;
+  $("f-ind").innerHTML = INDUSTRIES.map(v=>`<option>${esc(v)}</option>`).join("");
+  $("eds").innerHTML = ED_ORDER.map(k=>`<div class="ed-row" id="row-${k}">
+     <label><input type="checkbox" id="ck-${k}"><span class="dot" style="background:${ED[k].color}"></span>${ED[k].name}</label>
+     <span class="hint">${ED[k].copies.toLocaleString()}部</span>
+     <input type="number" id="ct-${k}" min="0" max="12" aria-label="${ED[k].name}の回数">
+   </div>`).join("");
+  ED_ORDER.forEach(k=>{
+    $("ck-"+k).addEventListener("change",e=>{st.eds[k]=e.target.checked?(st.eds[k]||Math.max(1,6-total())):0;syncInputs();renderAll();});
+    $("ct-"+k).addEventListener("input",e=>{const v=Math.max(0,Math.min(12,parseInt(e.target.value||"0",10)||0));st.eds[k]=v;syncInputs(false);renderAll();});
+  });
+  document.querySelectorAll("#kind button").forEach(b=>b.addEventListener("click",()=>{st.kind=b.dataset.k;
+    if(!SIZES[st.kind].includes(st.size))st.size="1/4P";syncInputs();renderAll();}));
+  const bind=(id,key,ev="input")=>$(id).addEventListener(ev,e=>{st[key]=e.target.value;renderAll();});
+  bind("f-name","name");bind("f-staff","staff");bind("f-tel","tel");
+  bind("f-ind","ind","change");bind("f-anniv","anniv");bind("f-rival-m","rivalM");bind("f-rival","rival");
+  $("f-size").addEventListener("change",e=>{st.size=e.target.value;renderAll();});
+  $("f-prod").addEventListener("change",e=>{st.prod=e.target.checked;renderAll();});
+  $("f-start").addEventListener("change",e=>{const k=+e.target.value;st.start={y:Math.floor(k/12),m:k%12+1};renderAll();});
+  $("e-headline").addEventListener("input",e=>{st.headline=e.target.value;renderSheet();save();});
+  $("e-feat").addEventListener("input",e=>{st.features=e.target.value.split("\n").filter(s=>s.trim());renderSheet();save();});
+}
+function syncInputs(counts=true){
+  $("f-name").value=st.name;$("f-staff").value=st.staff;$("f-tel").value=st.tel;
+  $("f-anniv").value=st.anniv;$("f-rival-m").value=st.rivalM;$("f-rival").value=st.rival;$("f-ind").value=st.ind;$("f-prod").checked=st.prod;
+  ED_ORDER.forEach(k=>{const on=st.eds[k]>0;$("ck-"+k).checked=on;$("row-"+k).classList.toggle("on",on);
+    if(counts)$("ct-"+k).value=on?st.eds[k]:"";$("ct-"+k).disabled=!on;});
+  document.querySelectorAll("#kind button").forEach(b=>b.classList.toggle("on",b.dataset.k===st.kind));
+  $("f-size").innerHTML=SIZES[st.kind].map(s=>`<option ${s===st.size?"selected":""}>${s}</option>`).join("");
+  const e=earliestIssue();let opts="";for(let i=0;i<6;i++){const o=addM(e.y,e.m,i);const d=deadlines(o);
+    opts+=`<option value="${issueKey(o)}" ${issueKey(o)===issueKey(st.start)?"selected":""}>${issueLabel(o)}（最終締切 ${d.final}）</option>`;}
+  $("f-start").innerHTML=opts;
+  $("e-headline").value=st.headline;$("e-feat").value=st.features.join("\n");
+}
+
+/* ---------- 料金 ---------- */
+function calc(){
+  const n=total(), ti=tierIdx(n), eds=selEds(), errs=[];
+  const lines=eds.map(k=>{const tbl=P[k][st.kind][st.size];if(!tbl){errs.push(`${ED[k].name}に${st.kind==="free"?"フリー":"定型"}${st.size}はありません`);return null;}
+    const unit=tbl[ti]; if(unit==null){errs.push(`${st.size}は年6回以上の契約のみです`);return null;}
+    return {k,unit,cnt:st.eds[k],sum:unit*st.eds[k]};}).filter(Boolean);
+  const ad=lines.reduce((a,l)=>a+l.sum,0);
+  const prodUnit=st.kind==="free"&&st.prod?(PROD[st.size]||0):0, prod=prodUnit*n;
+  const mk=mainEd(); let base=null;
+  if(mk&&P[mk][st.kind][st.size]&&!COVER.includes(st.size)){const u=P[mk][st.kind][st.size][2];base={k:mk,unit:u,sum:u*3,prod:prodUnit*3};}
+  const avg=n?Math.round(ad/n):0;
+  return {n,ti,lines,ad,prodUnit,prod,total:ad+prod,base,avg,errs:[...new Set(errs)]};
+}
+
+/* ---------- 好機 ---------- */
+function issuesRange(){const a=[];for(let i=0;i<12;i++)a.push(addM(st.start.y,st.start.m,i));return a;}
+function parseYM(v){const m=/^(\d{4})-(\d{2})$/.exec(v||"");return m?{y:+m[1],m:+m[2]}:null;}
+// 周年の号（プラン期間内）: {o, years, milestone}
+function annivInfo(){const a=parseYM(st.anniv);if(!a)return null;
+  const o=issuesRange().find(x=>x.m===a.m);if(!o)return null;const years=o.y-a.y;if(years<1)return null;
+  return {o,years,milestone:years%5===0||years===1||years===3};}
+// 同業店オープン: オープン月の号とその前の号
+function rivalInfo(){const r=parseYM(st.rivalM);if(!r)return null;const range=issuesRange();
+  const k=issueKey(r),inRange=range.some(x=>issueKey(x)===k),prev=addM(r.y,r.m,-1);
+  return {o:r,prev,inRange,prevIn:range.some(x=>issueKey(x)===issueKey(prev)),what:st.rival};}
+
+/* ---------- 業種のおすすめで組む ---------- */
+// 点数: ◎ピーク5・○2・その他1、周年+3（節目+4）、同業店オープン前・当月+2。
+// 点数の高い号から、すでに選んだ号と離れている号を優先して選ぶ（間を空けすぎない）。
+function autoPlan(){
+  const n=total(); if(!n)return null;
+  const ind=INDUSTRY[st.ind]||{peak:[],good:[]}, a=annivInfo(), r=rivalInfo();
+  const cands=issuesRange().filter(o=>deadlines(o).finalDate>=today).map(o=>{
+    const k=issueKey(o); let score=1, why=[];
+    if(ind.peak.includes(o.m)){score=5;why.push("一年でいちばん需要が高まる時期");}
+    else if(ind.good.includes(o.m)){score=2;why.push("需要が伸びる時期");}
+    if(a&&issueKey(a.o)===k){score+=a.milestone?4:3;why.unshift(`${a.years}周年の号`);}
+    if(r&&(issueKey(r.prev)===k||issueKey(r.o)===k)){score+=2;why.push("このエリアで先に知ってもらう");}
+    if(ind.peak.includes(o.m+1)||(o.m===12&&ind.peak.includes(1)))why.push("翌月の山に向けた予約・予告");
+    return {...o,k,score,why};});
+  // 候補は最大12号なので、すべての組み合わせを試して一番よいものを選ぶ
+  const want=Math.min(n,cands.length);let chosen=[],bv=-Infinity;
+  for(let mask=0;mask<(1<<cands.length);mask++){
+    let bits=0;for(let x=mask;x;x&=x-1)bits++;if(bits!==want)continue;
+    const pick=cands.filter((c,i)=>mask&(1<<i));
+    let v=pick.reduce((a,c)=>a+c.score,0)*10;
+    // 年をまたいで同じ組み方を続けるので、最後の号から翌年の最初の号までの間も数える
+    for(let i=0;i<pick.length;i++){const g=i?pick[i].k-pick[i-1].k:pick[0].k+12-pick[pick.length-1].k;if(g>3)v-=100*(g-3);v-=g*g;}
+    if(v>bv){bv=v;chosen=pick;}
+  }
+  // 点数の高い号から、回数の多い版（メイン版）を割り当てる
+  const slots=[];selEds().sort((x,y)=>st.eds[y]-st.eds[x]).forEach(k=>{for(let i=0;i<st.eds[k];i++)slots.push(k);});
+  const byScore=chosen.slice().sort((x,y)=>y.score-x.score||x.k-y.k);
+  byScore.forEach((c,i)=>c.ed=slots[i]||mainEd());
+  return chosen.sort((x,y)=>x.k-y.k).map(c=>({y:c.y,m:c.m,ed:c.ed,
+    reason:`${MONTH_THEME[c.m]}の時期。`+(c.why.length?c.why.join("、")+"。":"前後の号との間をつなぐ。"),
+    angle:""}));
+}
+function runAuto(){
+  if(!total()){$("status").textContent="掲載版を選んでください。";return;}
+  if(st.picks.length&&!confirm("今の掲載号の表を、おすすめの内容で置き換えます。よろしいですか？"))return;
+  const p=autoPlan(); st.picks=p||[];
+  if(st.picks.length<total())$("status").textContent=`締切前の号が${st.picks.length}つしかありません。開始の号を確認してください。`;
+  else $("status").textContent="たたき台を入れました。理由とテーマはお店に合わせて書き直してください。";
+  renderAll();
+}
+
+/* ---------- 描画 ---------- */
+function renderChance(){
+  const a=annivInfo(),r=rivalInfo(),out=[];
+  if(a)out.push(`周年：${issueLabel(a.o)}が${a.years}周年${a.milestone?"（節目）":""}`);
+  if(r)out.push(`同業店：${r.o.y}年${r.o.m}月オープン予定${r.what?"（"+r.what+"）":""}`+(r.prevIn||r.inRange?` → ${issueLabel(r.prev)}・${r.o.m}月号が先手を打つ候補`:"（プラン期間外）"));
+  $("chance").hidden=!out.length;$("chance").innerHTML=out.map(esc).join("<br>");
+}
+function renderCounts(){
+  const n=total();const el=$("count-msg");
+  if(!n){el.className="msg bad";el.textContent="掲載版を1つ以上選んでください。";return;}
+  el.className=n===6?"msg info":"msg warn";
+  el.textContent=`合計 ${n}回 → 料金は「${tierName(n)}」の単価で計算します。`+(n!==6?"（このページは年6回を想定しています）":"");
+}
+function renderPicks(){
+  const range=issuesRange();
+  const opts=range.map(o=>`<option value="${issueKey(o)}">${issueLabel(o)}</option>`).join("");
+  if(!st.picks.length){$("picks").innerHTML=`<tr><td colspan="6" class="hint">まだ号が入っていません。「業種のおすすめで組む」を押すか、下の「1行ふやす」で入れてください。</td></tr>`;}
+  else $("picks").innerHTML=st.picks.map((p,i)=>{const d=deadlines(p);
+    const late=d.finalDate<today?"<br><span style='color:var(--bad)'>締切済み</span>":(d.idealDate<today?"<br><span style='color:var(--warn)'>急ぎ</span>":"");
+    return `<tr><td>${i+1}<br><button type="button" data-del="${i}" aria-label="${i+1}行目を消す" style="padding:0 6px;font-size:12px">×</button></td>
+    <td><select data-i="${i}" data-f="iss" aria-label="${i+1}回目の号">${opts}</select></td>
+    <td><select data-i="${i}" data-f="ed" aria-label="${i+1}回目の版">${ED_ORDER.map(k=>`<option value="${k}" ${k===p.ed?"selected":""}>${ED[k].short}</option>`).join("")}</select></td>
+    <td class="num">${d.ideal}／${d.final}${late}</td>
+    <td><textarea data-i="${i}" data-f="reason" aria-label="${i+1}回目の理由">${esc(p.reason)}</textarea></td>
+    <td><textarea data-i="${i}" data-f="angle" aria-label="${i+1}回目のテーマ" placeholder="例: 母の日はメッセージ入りギフト">${esc(p.angle)}</textarea></td></tr>`;}).join("");
+  $("picks").insertAdjacentHTML("beforeend",`<tr><td colspan="6"><button type="button" id="add-row">＋ 1行ふやす</button></td></tr>`);
+  $("add-row").addEventListener("click",()=>{const used=st.picks.map(issueKey);const o=range.find(x=>!used.includes(issueKey(x))&&deadlines(x).finalDate>=today)||range[0];
+    st.picks.push({y:o.y,m:o.m,ed:mainEd()||ED_ORDER[0],reason:"",angle:""});st.picks.sort((a,b)=>issueKey(a)-issueKey(b));renderAll();});
+  $("picks").querySelectorAll("button[data-del]").forEach(b=>b.addEventListener("click",()=>{st.picks.splice(+b.dataset.del,1);renderAll();}));
+  $("picks").querySelectorAll("select[data-f=iss]").forEach(s=>{const p=st.picks[+s.dataset.i];s.value=issueKey(p);
+    if(s.value===""){s.insertAdjacentHTML("afterbegin",`<option value="${issueKey(p)}">${issueLabel(p)}</option>`);s.value=issueKey(p);}});
+  $("picks").querySelectorAll("select[data-i],textarea[data-i]").forEach(c=>c.addEventListener(c.tagName==="SELECT"?"change":"input",e=>{
+    const p=st.picks[+c.dataset.i],f=c.dataset.f;
+    if(f==="iss"){const k=+c.value;p.y=Math.floor(k/12);p.m=k%12+1;st.picks.sort((a,b)=>issueKey(a)-issueKey(b));renderPicks();}
+    else if(f==="ed"){p.ed=c.value;renderPickMsg();}
+    else p[f]=c.value;
+    renderPrice();renderSheet();save();}));
+  renderPickMsg();
+}
+function renderPickMsg(){
+  if(!st.picks.length){$("pick-msg").innerHTML="";return;}
+  const msgs=[],cnt={};st.picks.forEach(p=>cnt[p.ed]=(cnt[p.ed]||0)+1);
+  ED_ORDER.forEach(k=>{const want=st.eds[k]||0,have=cnt[k]||0;if(want!==have)msgs.push(`${ED[k].short}: 条件は${want}回、表は${have}回`);});
+  if(st.picks.length!==total())msgs.unshift(`表の行数（${st.picks.length}）と合計回数（${total()}）が違います。`);
+  const ks=st.picks.map(issueKey).sort((a,b)=>a-b);let gap=0;for(let i=1;i<ks.length;i++)gap=Math.max(gap,ks[i]-ks[i-1]);
+  if(gap>=4)msgs.push(`掲載の間が${gap}か月空くところがあります（3か月以内が目安）。`);
+  $("pick-msg").innerHTML=msgs.length?`<div class="msg warn">${msgs.map(esc).join("<br>")}</div>`:"";
+}
+function renderPrice(){
+  const c=calc();
+  if(c.errs.length){$("price").innerHTML=`<tr><td colspan="4"><div class="msg bad">${c.errs.map(esc).join("<br>")}</div></td></tr>`;$("price-note").textContent="";$("cond-msg").innerHTML=`<div class="msg bad">${c.errs.map(esc).join("<br>")}</div>`;return;}
+  $("cond-msg").innerHTML="";
+  let h=c.lines.map(l=>`<tr><td>${ED[l.k].name} ${st.kind==="free"?"フリー":"定型"}${st.size}（${tierName(c.n)}）</td><td class="num">${yen(l.unit)}</td><td class="num">${l.cnt}</td><td class="num">${yen(l.sum)}</td></tr>`).join("");
+  if(c.prod)h+=`<tr><td>制作費</td><td class="num">${yen(c.prodUnit)}</td><td class="num">${c.n}</td><td class="num">${yen(c.prod)}</td></tr>`;
+  h+=`<tr><td><b>合計（税別）</b></td><td></td><td></td><td class="num"><b>${yen(c.total)}</b></td></tr>`;
+  h+=`<tr><td>税込</td><td></td><td></td><td class="num">${yen(Math.round(c.total*1.1))}</td></tr>`;
+  if(c.base)h+=`<tr><td style="color:var(--muted)">比較：${ED[c.base.k].short}だけで年3回</td><td class="num">${yen(c.base.unit)}</td><td class="num">3</td><td class="num">${yen(c.base.sum)}</td></tr>`;
+  $("price").innerHTML=h;
+  let note="";
+  if(c.base&&c.n>3){const diff=c.base.unit-c.avg,rate=Math.round(diff/c.base.unit*1000)/10,extra=Math.round((c.ad-c.base.sum)/(c.n-3));
+    note=`1回あたり ${yen(c.avg)}円（年3回より ${yen(diff)}円・▲${rate}%）。追加の${c.n-3}回は実質1回 ${yen(extra)}円。`;}
+  if(st.kind==="free"&&c.prod)note+=" 制作費は原稿を作るたびに計上しています。";
+  $("price-note").textContent=note;
+}
+function sheetHTML(){
+  const c=calc(), range=issuesRange(), picks=st.picks.slice().sort((a,b)=>issueKey(a)-issueKey(b));
+  const byKey={};picks.forEach(p=>(byKey[issueKey(p)]=byKey[issueKey(p)]||[]).push(p.ed));
+  const ds=`${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日`;
+  const usedEds=[...new Set(picks.map(p=>p.ed))];
+  const size=`${st.kind==="free"?"フリー広告":"定型広告"} ${st.size}`;
+  const ai=annivInfo();
+  const tl=range.map(o=>{const e=byKey[issueKey(o)];
+    const bg=e?(e.length>1?`linear-gradient(135deg,${ED[e[0]].color} 50%,${ED[e[1]].color} 50%)`:ED[e[0]].color):"";
+    const an=ai&&issueKey(ai.o)===issueKey(o)?`<br>${ai.years}周年`:"";
+    return `<div class="${e?"hit":""}" style="${e?`background:${bg}`:""}"><span class="y">${o.m===1||issueKey(o)===issueKey(range[0])?o.y+"年":"&nbsp;"}</span><b>${o.m}月</b>${e?"掲載":""}${an}</div>`;}).join("");
+  const rows=picks.map((p,i)=>{const d=deadlines(p);return `<tr><td class="n">${i+1}</td><td style="white-space:nowrap"><b>${issueLabel(p)}</b></td>
+    <td><span class="edtag" style="background:${ED[p.ed].color}">${ED[p.ed].short}</span></td>
+    <td class="n">${distText(p.ed,p)}</td><td class="n">${d.ideal}</td><td>${esc(p.reason)}</td><td>${esc(p.angle)}</td></tr>`;}).join("");
+  let price="";
+  if(!c.errs.length&&c.n){
+    const lines=c.lines.map(l=>`<tr><td>${ED[l.k].short} ${size}</td><td class="n">${yen(l.unit)}円 × ${l.cnt}回</td><td class="n">${yen(l.sum)}円</td></tr>`).join("");
+    const prod=c.prod?`<tr><td>制作費</td><td class="n">${yen(c.prodUnit)}円 × ${c.n}回</td><td class="n">${yen(c.prod)}円</td></tr>`:"";
+    const save=c.base&&c.n>3?`<div class="save"><small>${ED[c.base.k].short}版で年3回の場合（1回 ${yen(c.base.unit)}円）と比べて</small><span class="big">1回あたり ${yen(c.base.unit-c.avg)}円おトク</span><small>このプランの1回あたり掲載料 ${yen(c.avg)}円（▲${Math.round((c.base.unit-c.avg)/c.base.unit*1000)/10}%）</small></div>`
+      :`<div class="save"><small>料金プラン</small><span class="big">${tierName(c.n)}</span><small>全版の合計回数で料金ランクが決まります</small></div>`;
+    price=`<div class="price"><table><thead><tr><th>内訳（税別）</th><th style="text-align:right">単価 × 回数</th><th style="text-align:right">金額</th></tr></thead><tbody>${lines}${prod}
+      <tr><td><b>合計</b></td><td class="n">税込 ${yen(Math.round(c.total*1.1))}円</td><td class="n"><b>${yen(c.total)}円</b></td></tr></tbody></table>${save}</div>
+      <p class="note">※料金は${esc(PRICE_SOURCE)}の正規料金です。年6〜8回の料金は、複数の版にまたがる場合も合計回数で適用します。${c.prod?"制作費は原稿を作成する回ごとに計上しています。":""}</p>`;
+  }
+  const feats=(st.features||[]).slice(0,3).map(f=>`<div>${esc(f)}</div>`).join("");
+  const copies=usedEds.map(k=>`${ED[k].short} ${ED[k].copies.toLocaleString()}部`).join("／");
+  return `<div class="s-top"><div class="brand"><small>地域みっちゃく生活情報誌</small>くれよん</div>
+    <div class="meta">${ds}<br>株式会社ケイ・クリエイト${st.staff?`<br>担当：${esc(st.staff)}`:""}${st.tel?`　TEL ${esc(st.tel)}`:""}</div></div>
+    <h1 class="s-title"><span>${esc(st.name||"お客様")} 様</span>くれよん 年${c.n}回 掲載プランのご提案</h1>
+    ${st.headline?`<p class="catch">${esc(st.headline)}</p>`:""}
+    ${feats?`<div class="sec"><h4>お店の魅力</h4><div class="feat">${feats}</div></div>`:""}
+    <div class="sec"><h4>掲載スケジュール（${size}）</h4><div class="tl">${tl}</div></div>
+    <div class="sec"><table><thead><tr><th>#</th><th>号</th><th>版</th><th>配布</th><th>お申込み目安</th><th>この号に載せる理由</th><th>原稿のテーマ</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="sec"><h4>料金</h4>${price}</div>
+    <div class="sec"><h4>年6回をおすすめする理由</h4><div class="why">
+      ${WHY.map(([b,t])=>`<div><b>${esc(b)}</b>${esc(t)}</div>`).join("")}</div>
+      <p class="note">${esc(WHY_SOURCE)}</p></div>
+    <div class="foot"><div><b>くれよん</b>　${copies}　（毎月 戸別配布）</div><div>株式会社ケイ・クリエイト</div></div>`;
+}
+function renderSheet(){
+  $("sheet").innerHTML=sheetHTML();
+  const s=$("sheet"),over=s.scrollHeight>s.clientHeight+1;
+  $("fit-msg").innerHTML=over?`<div class="msg bad">A4一枚に収まっていません。理由やテーマの文章を短くしてください。</div>`:"";
+  fitScale();
+}
+function fitScale(){const w=$("frame").clientWidth-32;const k=Math.min(1,w/794);
+  $("scaler").style.transform=`scale(${k})`;$("scaler").style.height=(1123*k)+"px";$("scaler").style.width=(794*k)+"px";}
+function renderAll(){renderChance();renderCounts();renderPicks();renderPrice();renderSheet();save();}
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+window.addEventListener("resize",fitScale);
+
+/* ---------- PDF ---------- */
+async function makePDF(){
+  const ps=$("pdf-status");
+  if(calc().errs.length){ps.textContent="料金の条件にエラーがあります。";return;}
+  if(!window.html2canvas||!window.jspdf){ps.textContent="PDFの部品を読み込めませんでした。再読み込みしてください。";return;}
+  $("pdf").disabled=true;ps.textContent="PDFを作っています…";
+  try{
+    await document.fonts.ready;
+    const cap=$("capture");cap.innerHTML="";const node=document.createElement("div");node.className="sheet";node.style.boxShadow="none";node.innerHTML=sheetHTML();cap.appendChild(node);
+    const canvas=await html2canvas(node,{scale:2.5,backgroundColor:"#ffffff",useCORS:true,width:794,height:1123,windowWidth:900});
+    cap.innerHTML="";
+    const pdf=new window.jspdf.jsPDF({unit:"mm",format:"a4",orientation:"portrait"});
+    pdf.addImage(canvas.toDataURL("image/jpeg",0.92),"JPEG",0,0,210,297);
+    pdf.save(`くれよん年${total()}回プラン_${(st.name||"お客様").replace(/[\\/:*?"<>|]/g,"")}.pdf`);
+    ps.textContent="ダウンロードしました。";
+  }catch(e){ps.textContent="PDFを作れませんでした。";}
+  finally{$("pdf").disabled=false;}
+}
+
+/* ---------- 起動 ---------- */
+buildInputs();syncInputs();renderAll();
+$("run").addEventListener("click",runAuto);
+$("pdf").addEventListener("click",makePDF);
+$("reset").addEventListener("click",()=>{if(!confirm("入力をすべて消して最初からにします。よろしいですか？"))return;
+  st=blank();try{localStorage.removeItem(STORE);}catch(e){}syncInputs();renderAll();$("status").textContent="";});
+</script>
+</body>
+</html>
