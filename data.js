@@ -85,4 +85,4 @@ const WHY = [
 const WHY_SOURCE = "出典：地域みっちゃく生活情報誌 2025年1月号読者アンケート（回答数14,245人）、くれよん媒体資料";
 
 // 「サイトから魅力を書く」の中継サーバーのURL（worker フォルダを Cloudflare に置いたURL）。空ならボタンを出さない
-const MIRYOKU_API = "";
+const MIRYOKU_API = "https://kureyon-nen6-miryoku.kureyon-nen6-miryoku.workers.dev";
