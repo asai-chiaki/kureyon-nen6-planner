@@ -257,9 +257,9 @@ function deadlines(iss){const p=addM(iss.y,iss.m,-1),pp=addM(iss.y,iss.m,-2);
 function issueLabel(o,withYear=true){return (withYear?`${o.y}年`:"")+`${o.m}月号`;}
 function tierIdx(n){if(n>=12)return 7;if(n>=9)return 6;if(n>=6)return 5;return Math.max(0,n-1);}
 function tierName(n){return ["年1回","年2回","年3回","年4回","年5回","年6〜8回","年9〜11回","年12回"][tierIdx(n)];}
-// 求人の料金は 年1回・年6回・年12回 の3段階（2〜5回は年1回、7〜11回は年6回の料金）
-function jobTierIdx(n){return n>=12?2:n>=6?1:0;}
-function jobTierName(n){return ["年1回","年6回","年12回"][jobTierIdx(n)];}
+// 求人の料金は 年1回〜年12回 の回数ごと（2026年9月版〜）
+function jobTierIdx(n){return Math.min(Math.max(n,1),12)-1;}
+function jobTierName(n){return `年${jobTierIdx(n)+1}回`;}
 const yen = v => v==null?"—":v.toLocaleString("ja-JP");
 
 /* ---------- 状態（このブラウザに自動保存） ---------- */
@@ -364,15 +364,15 @@ function calc(){
     let s=0,ok=true;TYPES.forEach(type=>selEds(type).forEach(k=>{const u=unitPrice(type,k,cnt(type));if(u==null)ok=false;else s+=u*edsOf(type)[k];}));
     if(ok)sep={sum:s,diff:s-ad};
   }else if(n){
-    // 比べる相手: 通常は「年3回」、求人は「年1回の料金で3回」
+    // 比べる相手: 通常・求人とも「年3回」
     const type=usedTypes()[0],mk=mainEd(type);
-    if(type==="job")base={type,k:mk,unit:unitPrice("job",mk,1)};
+    if(type==="job")base={type,k:mk,unit:unitPrice("job",mk,3)};
     else if(!COVER.includes(st.size)){const u=unitPrice("ad",mk,3);if(u!=null)base={type,k:mk,unit:u};}
     if(base)base.sum=base.unit*3;
   }
   return {n,lines,ad,prodUnit,prod,total:ad+prod,base,sep,avg:n?Math.round(ad/n):0,errs:[...new Set(errs)]};
 }
-function baseName(b){return b.type==="job"?"年1回の料金で3回":"年3回";}
+function baseName(b){return "年3回";}
 
 /* ---------- 好機 ---------- */
 function issuesRange(){const a=[];for(let i=0;i<12;i++)a.push(addM(st.start.y,st.start.m,i));return a;}
