@@ -138,7 +138,7 @@ ul.plain{margin:0;padding-left:1.2em}
       <li><b>「業種のおすすめで組む」を押す</b>：6回の号・版・理由のたたき台が入ります。表はそのまま書き直せます</li>
       <li><b>「PDFをダウンロード」</b>：お客様に渡すA4一枚ができます</li>
     </ol>
-    <p class="hint">入力内容はこのパソコンのブラウザにだけ保存されます（ほかの人には見えません）。</p>
+    <p class="hint">入力内容は保存されません。ページを開き直すと空の状態から始まります。</p>
   </header>
 
   <div class="cols">
@@ -247,13 +247,15 @@ const TYPE_NAME = {ad:"通常",job:"求人"};
 const today = new Date();
 function lastDay(y,m){return new Date(y,m,0).getDate();} // m:1-12
 function addM(y,m,k){const t=(y*12+(m-1))+k;return {y:Math.floor(t/12),m:t%12+1};}
-function earliestIssue(){const d=today.getDate();const k=d<=10?1:2;return addM(today.getFullYear(),today.getMonth()+1,k);}
+// 当月号（来月号）は毎月15日の〆切まで選べる
+const CUTOFF_DAY = 15;
+function earliestIssue(){const d=today.getDate();const k=d<=CUTOFF_DAY?1:2;return addM(today.getFullYear(),today.getMonth()+1,k);}
 function issueKey(o){return o.y*12+(o.m-1);}
 function distText(ed,iss){const p=addM(iss.y,iss.m,-1);const t=ED[ed].dist;
   if(t==="end")return `${p.m}/${lastDay(p.y,p.m)}〜`; return `${p.m}/${t}頃〜`;}
 function deadlines(iss){const p=addM(iss.y,iss.m,-1),pp=addM(iss.y,iss.m,-2);
-  return {ideal:`${pp.m}/${lastDay(pp.y,pp.m)}`,final:`${p.m}/10`,
-    finalDate:new Date(p.y,p.m-1,10,23,59),idealDate:new Date(pp.y,pp.m-1,lastDay(pp.y,pp.m),23,59)};}
+  return {ideal:`${pp.m}/${lastDay(pp.y,pp.m)}`,final:`${p.m}/${CUTOFF_DAY}`,
+    finalDate:new Date(p.y,p.m-1,CUTOFF_DAY,23,59),idealDate:new Date(pp.y,pp.m-1,lastDay(pp.y,pp.m),23,59)};}
 function issueLabel(o,withYear=true){return (withYear?`${o.y}年`:"")+`${o.m}月号`;}
 function tierIdx(n){if(n>=12)return 7;if(n>=9)return 6;if(n>=6)return 5;return Math.max(0,n-1);}
 function tierName(n){return ["年1回","年2回","年3回","年4回","年5回","年6〜8回","年9〜11回","年12回"][tierIdx(n)];}
@@ -262,20 +264,15 @@ function jobTierIdx(n){return Math.min(Math.max(n,1),12)-1;}
 function jobTierName(n){return `年${jobTierIdx(n)+1}回`;}
 const yen = v => v==null?"—":v.toLocaleString("ja-JP");
 
-/* ---------- 状態（このブラウザに自動保存） ---------- */
+/* ---------- 状態（開くたびに空の状態から。前回の入力は残さない） ---------- */
 const STORE = "kureyon-nen6-planner-v1";
 function blank(){return {name:"",ind:INDUSTRIES[0],url:"",goal:"",job:"",memo:"",paste:"",anniv:"",rivalM:"",rival:"",
   eds:{kiyosu:6},jobEds:{},kind:"free",size:"1/4P",prod:true,jobSize:"1/15",start:earliestIssue(),staff:"",tel:"",
   headline:"",features:[],picks:[]};}
 let st = blank();
-try{const s=JSON.parse(localStorage.getItem(STORE)||"null");
-  if(s&&s.start){st=Object.assign(blank(),s);
-    // 以前の「求人広告モード」で保存した内容は、回数を求人の欄へ移す
-    if(s.mode==="job"&&!s.jobEds){st.jobEds=s.eds||{};st.eds={};}
-    st.picks=(st.picks||[]).map(p=>({...p,type:p.type||(s.mode==="job"?"job":"ad")}));delete st.mode;}}catch(e){}
-if(issueKey(st.start)<issueKey(earliestIssue()))st.start=earliestIssue();
-let saveT=null;
-function save(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem(STORE,JSON.stringify(st));}catch(e){}},300);}
+// 以前の版がブラウザに残した入力内容は消しておく
+try{localStorage.removeItem(STORE);}catch(e){}
+function save(){}
 
 /* ---------- 回数と種類 ---------- */
 const $ = id => document.getElementById(id);
@@ -663,7 +660,7 @@ $("run").addEventListener("click",runAuto);
 $("pdf").addEventListener("click",makePDF);
 if(MIRYOKU_API){$("shop-info").hidden=false;$("ai-run").hidden=false;$("run").classList.remove("primary");$("ai-run").addEventListener("click",runAI);}
 $("reset").addEventListener("click",()=>{if(!confirm("入力をすべて消して最初からにします。よろしいですか？"))return;
-  st=blank();try{localStorage.removeItem(STORE);}catch(e){}syncInputs();renderAll();$("status").textContent="";});
+  st=blank();syncInputs();renderAll();$("status").textContent="";});
 </script>
 </body>
 </html>
